@@ -193,14 +193,14 @@ function autoLayout(
     let rowMaxH = 0;
 
     for (const c of items) {
-      const span = SIZE_TO_SPAN[c.size || "md"];
+      const span = 1; // uniform width for all cards
       if (col + span > COLS) {
         rowY += rowMaxH + ROW_GAP;
         col = 0;
         rowMaxH = 0;
       }
       const x = PAD_X + col * (COL_W + COL_GAP);
-      const baseH = SIZE_TO_HEIGHT[c.size || "md"];
+      const baseH = SIZE_TO_HEIGHT.md;
       // Reserve extra room for pre-expanded cards so neighbors don't overlap.
       const evidenceCount = c.evidence.length || 1;
       const expandBonus = expandedIds.has(c.id) ? 28 + evidenceCount * 64 : 0;
