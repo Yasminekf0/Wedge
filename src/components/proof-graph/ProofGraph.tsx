@@ -459,8 +459,9 @@ function ClaimCard({
       style={{ left: x, top: y, width, cursor: "pointer" }}
       aria-expanded={expanded}
     >
-      <div className="px-4 pt-4 pb-3">
-        <p className="text-[15px] font-medium leading-snug text-foreground">
+      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+        <ClaimGlyph claim={claim} />
+        <p className="flex-1 text-[15px] font-medium leading-snug text-foreground">
           {claim.text}
         </p>
       </div>
