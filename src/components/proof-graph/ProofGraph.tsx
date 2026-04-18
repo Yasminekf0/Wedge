@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Github,
@@ -11,6 +12,7 @@ import {
   Globe,
   Link2,
   Box,
+  Send,
   X,
 } from "lucide-react";
 import type {
@@ -241,6 +243,13 @@ function ProofHeaderBar({ profile }: { profile: ProofProfile }) {
           <p className="mt-0.5 text-[14px] text-muted-fg">{header.bio}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/outreach"
+            className="mono inline-flex items-center gap-2 rounded-md border border-accent bg-accent px-4 py-2 text-[12px] font-medium uppercase tracking-wider text-accent-fg shadow-[0_6px_20px_-8px_rgb(76_110_245_/_0.7)] transition-all hover:opacity-90 hover:shadow-[0_8px_24px_-8px_rgb(76_110_245_/_0.85)]"
+          >
+            <Send className="h-4 w-4" />
+            Draft outreach
+          </Link>
           {header.linkedin && (
             <a
               href={header.linkedin}
