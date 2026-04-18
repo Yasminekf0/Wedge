@@ -333,7 +333,7 @@ function ClaimCard({
   index,
   filterLabelById,
 }: CardProps) {
-  const width = SIZE_TO_WIDTH[claim.size || "md"];
+  const width = spanWidth(SIZE_TO_SPAN[claim.size || "md"]);
   const x = claim.position?.x ?? 0;
   const y = claim.position?.y ?? 0;
 
