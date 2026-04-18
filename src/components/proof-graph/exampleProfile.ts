@@ -252,7 +252,7 @@ export const exampleProfile: ProofProfile = {
           title: "Rust Foundation — 2023 grantees",
           description: "One of 12 recipients selected from 200+ applications.",
           url: "https://foundation.rust-lang.org",
-          logo: favicon("foundation.rust-lang.org"),
+          logo: ghAvatar("rust-lang"),
         },
         {
           type: "repo",
