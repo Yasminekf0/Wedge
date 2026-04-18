@@ -2,10 +2,25 @@ import { createServerFn } from "@tanstack/react-start";
 
 type Mode = "ideas" | "email";
 
+export interface ArtifactIdea {
+  title: string;
+  why_it_lands: string;
+  estimated_hours: number;
+  what_to_build: string;
+}
+
+export interface IdeasResult {
+  ideas: ArtifactIdea[];
+}
+
+export interface EmailResult {
+  subject: string;
+  body: string;
+}
+
 interface CallInput {
   mode: Mode;
   jobMarkdown: string;
-  // for email mode only
   proofSummary?: string;
   artifactTitle?: string;
   artifactWhatToBuild?: string;
