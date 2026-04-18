@@ -102,6 +102,11 @@ export const callClaude = createServerFn({ method: "POST" })
     const text =
       json.content?.filter((c) => c.type === "text").map((c) => c.text || "").join("\n") || "";
 
-    const parsed = extractJson(text) as Record<string, unknown>;
-    return parsed;
+    const parsed = extractJson(text);
+    if (data.mode === "ideas") {
+      const r = parsed as IdeasResult;
+      return { mode: "ideas" as const, ideas: r.ideas };
+    }
+    const e = parsed as EmailResult;
+    return { mode: "email" as const, subject: e.subject, body: e.body };
   });
