@@ -191,6 +191,7 @@ function WedgePage() {
   );
   const [voiceMode, setVoiceMode] = React.useState<SlopMode>("default");
   const outreachRef = React.useRef<HTMLDivElement>(null);
+  const [proofExpanded, setProofExpanded] = React.useState(false);
 
   // Long-loading label timer
   React.useEffect(() => {
@@ -816,11 +817,21 @@ function WedgePage() {
             </Section>
           )}
 
-          {/* Proof Graph — embedded, with simulated job match on */}
+          {/* Proof Graph — embedded, with simulated job match on. Expandable. */}
           <Section header={`${proofNum} / Proof Graph`}>
-            <div className="-mx-6">
-              <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setProofExpanded((v) => !v)}
+              aria-expanded={proofExpanded}
+              className="mono text-[12px] uppercase tracking-wider text-accent underline-offset-4 hover:underline"
+            >
+              {proofExpanded ? "Collapse" : "Expand"} proof graph
+            </button>
+            {proofExpanded && (
+              <div className="-mx-6 mt-6">
+                <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
+              </div>
+            )}
           </Section>
 
           {/* Artifact Ideas */}
