@@ -708,7 +708,7 @@ function SparseList({
 // ---------------------------------------------------------------------------
 
 export function ProofGraph({ profile }: { profile: ProofProfile }) {
-  const claims = React.useMemo(
+  const { claims, sections, height: boardHeight } = React.useMemo(
     () => autoLayout(profile.claims),
     [profile.claims],
   );
