@@ -23,6 +23,7 @@ import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
+import { detectSlop, slopRegenInstruction } from "@/lib/slopFilter";
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
@@ -129,7 +130,12 @@ function WedgePage() {
   const [email, setEmail] = React.useState<EmailDraft | null>(null);
   const [emailError, setEmailError] = React.useState(false);
   const [emailLoading, setEmailLoading] = React.useState(false);
+  const [emailStage, setEmailStage] = React.useState<
+    "idle" | "drafting" | "checking" | "rewriting"
+  >("idle");
+  const [slopHint, setSlopHint] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [copiedSubject, setCopiedSubject] = React.useState(false);
 
   // Long-loading label timer
   React.useEffect(() => {
