@@ -402,6 +402,7 @@ interface CardProps {
   expanded: boolean;
   dim: boolean;
   highlight: boolean;
+  jobMatch: boolean;
   onToggle: (id: string) => void;
   index: number;
   filterLabelById: Map<string, string>;
@@ -412,6 +413,7 @@ function ClaimCard({
   expanded,
   dim,
   highlight,
+  jobMatch,
   onToggle,
   index,
   filterLabelById,
