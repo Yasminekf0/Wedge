@@ -179,7 +179,8 @@ export const exampleProfile: ProofProfile = {
     {
       id: "c6",
       section: "work",
-      text: "Led the payments infra rewrite at Klarna, cut p99 by 60%.",
+      text: "Senior Backend Engineer, Klarna",
+      subtext: "Led the payments infra rewrite — cut p99 latency by 60%.",
       tags: ["distributed", "infra", "production", "rust"],
       size: "lg",
       evidence: [
@@ -188,7 +189,7 @@ export const exampleProfile: ProofProfile = {
           title: "Klarna",
           description:
             "Migrated payments pipeline from Node to Rust + Tokio, removed three queues.",
-          meta: "Senior Backend Engineer · 2022 — 2024",
+          meta: "2022 — 2024",
           url: "https://klarna.com",
           logo: favicon("klarna.com"),
         },
@@ -197,7 +198,8 @@ export const exampleProfile: ProofProfile = {
     {
       id: "c7",
       section: "work",
-      text: "Founded the data platform team at Spotify's growth org.",
+      text: "Founding Data Engineer, Spotify",
+      subtext: "Built the data platform team in the growth org from scratch.",
       tags: ["infra", "production", "go"],
       size: "md",
       evidence: [
@@ -206,7 +208,7 @@ export const exampleProfile: ProofProfile = {
           title: "Spotify",
           description:
             "Hired 3, set up streaming ingestion on Kafka, owned warehouse spend.",
-          meta: "Founding Data Engineer · 2020 — 2022",
+          meta: "2020 — 2022",
           url: "https://spotify.com",
           logo: favicon("spotify.com"),
         },
@@ -215,15 +217,16 @@ export const exampleProfile: ProofProfile = {
     {
       id: "c8",
       section: "work",
-      text: "Engineering intern on the Stripe Issuing team.",
+      text: "SWE Intern, Stripe",
+      subtext: "Shipped a card authorization webhook on the Issuing team.",
       tags: ["production", "infra"],
       size: "sm",
       evidence: [
         {
           type: "work",
           title: "Stripe",
-          description: "Shipped a card authorization webhook used by 400+ merchants.",
-          meta: "SWE Intern · Summer 2019",
+          description: "Used by 400+ merchants within 3 months of launch.",
+          meta: "Summer 2019",
           url: "https://stripe.com",
           logo: favicon("stripe.com"),
         },

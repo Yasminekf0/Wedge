@@ -484,9 +484,16 @@ function ClaimCard({
     >
       <div className="flex items-start gap-3 px-4 pt-4 pb-3">
         <ClaimGlyph claim={claim} />
-        <p className="flex-1 text-[15px] font-medium leading-snug text-foreground">
-          {claim.text}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-medium leading-snug text-foreground">
+            {claim.text}
+          </p>
+          {claim.subtext && (
+            <p className="mt-1 text-[13px] leading-snug text-muted-fg">
+              {claim.subtext}
+            </p>
+          )}
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
