@@ -101,9 +101,10 @@ const EVIDENCE_ICON: Record<EvidenceType, React.ComponentType<{ className?: stri
 };
 
 const SECTION_TINT: Record<ClaimSection, string> = {
-  projects: "#7c5cff", // violet
-  work: "#4cb2ff",     // blue
-  education: "#f0a23a", // amber
+  projects: "#7c5cff",     // violet
+  achievements: "#22c1a3", // teal
+  work: "#4cb2ff",         // blue
+  education: "#f0a23a",    // amber
 };
 
 // Glyph rendered at the top-left of every claim card.
