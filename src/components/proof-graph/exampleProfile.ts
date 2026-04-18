@@ -28,6 +28,8 @@ export const exampleProfile: ProofProfile = {
     { id: "teaching", label: "Teaching" },
     { id: "infra", label: "Infrastructure" },
     { id: "go", label: "Go" },
+    { id: "writing", label: "Writing" },
+    { id: "speaking", label: "Speaking" },
   ],
   jobActiveFilterIds: ["rust", "distributed", "production"],
   claims: [
