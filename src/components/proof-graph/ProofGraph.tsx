@@ -53,9 +53,10 @@ function spanWidth(span: number): number {
   return span * COL_W + (span - 1) * COL_GAP;
 }
 
-const SECTION_ORDER: ClaimSection[] = ["projects", "work", "education"];
+const SECTION_ORDER: ClaimSection[] = ["projects", "achievements", "work", "education"];
 const SECTION_LABEL: Record<ClaimSection, string> = {
   projects: "Projects",
+  achievements: "Achievements",
   work: "Work",
   education: "Education",
 };
@@ -100,9 +101,10 @@ const EVIDENCE_ICON: Record<EvidenceType, React.ComponentType<{ className?: stri
 };
 
 const SECTION_TINT: Record<ClaimSection, string> = {
-  projects: "#7c5cff", // violet
-  work: "#4cb2ff",     // blue
-  education: "#f0a23a", // amber
+  projects: "#7c5cff",     // violet
+  achievements: "#22c1a3", // teal
+  work: "#4cb2ff",         // blue
+  education: "#f0a23a",    // amber
 };
 
 // Glyph rendered at the top-left of every claim card.
@@ -168,6 +170,7 @@ interface LayoutResult {
 function autoLayout(rawClaims: Claim[]): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
+    achievements: [],
     work: [],
     education: [],
   };
