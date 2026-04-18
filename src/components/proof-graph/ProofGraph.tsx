@@ -425,7 +425,8 @@ function ClaimCard({
   index,
   filterLabelById,
 }: CardProps) {
-  const width = spanWidth(SIZE_TO_SPAN[claim.size || "md"]);
+  // All cards share the same width regardless of claim.size.
+  const width = spanWidth(1);
   const x = claim.position?.x ?? 0;
   const y = claim.position?.y ?? 0;
 
