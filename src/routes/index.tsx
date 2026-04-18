@@ -377,6 +377,8 @@ function WedgePage() {
     setEmailError(false);
     setCompanyState("loading");
     setCompany(null);
+    setBlog(null);
+    setHn(null);
 
     let c: CompanySignal | null = null;
     try {
@@ -399,10 +401,36 @@ function WedgePage() {
       name: c?.org.name ?? h,
     });
 
+    // Re-fetch blog + HN against the corrected org/domain in parallel.
+    const jobDomain = extractDomain(jobUrl);
+    const nameForFetch = companyName || c?.org.name || h;
+    const domainForFetch = extractDomain(c?.org.blog ?? null) || jobDomain;
+    const [b, hSig] = await Promise.all([
+      fetchCompanyBlog({
+        companyName: nameForFetch,
+        orgBlogUrl: c?.org.blog ?? null,
+        orgWebsiteDomain: domainForFetch,
+      })
+        .then((x) => {
+          setBlog(x);
+          return x;
+        })
+        .catch(() => null),
+      fetchHNSignal({
+        companyName: nameForFetch,
+        orgWebsiteDomain: domainForFetch,
+      })
+        .then((x) => {
+          setHn(x);
+          return x;
+        })
+        .catch(() => null),
+    ]);
+
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
-    await runIdeasAndEmail(jobMd, c, proof);
+    await runIdeasAndEmail(jobMd, c, proof, b, hSig);
     setLoading(false);
   }
 
@@ -414,6 +442,8 @@ function WedgePage() {
           mode: "ideas",
           jobMarkdown: jobMd,
           companySignalJson: company ? JSON.stringify(company, null, 2) : "",
+          blogSignalJson: blog ? JSON.stringify(blog, null, 2) : "",
+          hnSignalJson: hn ? JSON.stringify(hn, null, 2) : "",
           candidateSummary: summariseCandidate(proof),
         },
       });
