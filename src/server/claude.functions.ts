@@ -18,7 +18,7 @@ export type CitationSource =
   | "company_github"
   | "company_blog"
   | "hn"
-  | "candidate_github";
+  | "candidate_proof";
 
 export interface Citation {
   source: CitationSource;
@@ -30,7 +30,7 @@ export interface Citation {
   hn_thread_title?: string; // hn
   hn_thread_url?: string; // hn
   job_post_quote?: string; // job_post (≤140 chars verbatim)
-  candidate_repo?: string; // candidate_github
+  candidate_claim?: string; // candidate_proof — the claim id from the proof graph
   /** Why this specific source drove this specific idea. One sentence. */
   relevance: string;
 }
@@ -85,7 +85,7 @@ You will receive up to five sources of context:
 2. The company's GitHub org activity — recent repos, releases, languages (usually present)
 3. The company's recent engineering blog posts (sometimes present — may include recruiting posts or low-signal content, use judgment)
 4. Hacker News threads about the company (rarely present, but when present these have been pre-filtered for quality — treat them as high-signal)
-5. The candidate's GitHub profile (always present)
+5. The candidate's proof graph — a curated list of claims (work, projects, achievements, education) each with a stable id (always present)
 
 Your job: propose up to 3 artifact ideas. Each idea must:
 - Reference something specific from sources 1–4 (cite it in why_it_lands)
@@ -112,7 +112,7 @@ For each idea, include 1-3 citations that point to the exact things you used:
 - If you're referencing a blog post, cite its title AND url — copy them verbatim from the provided blog signal. Do not paraphrase titles.
 - If you're referencing an HN thread, cite its title AND url verbatim.
 - If you're referencing the job post, quote the specific sentence or phrase (≤140 chars, verbatim from the job post).
-- If you're referencing the candidate's skills, cite the specific repo of theirs that demonstrates the skill.
+- If you're referencing the candidate's background, cite the specific claim from their proof graph by its id (e.g. "c3"). The id appears as id="..." at the start of each claim line.
 
 For each citation, the "relevance" field must explain in one sentence WHY that specific source drove this specific idea. Not "this is relevant to the company" — that's useless. Something like "their Jan 2024 postmortem explicitly called out observability in gRPC as an open problem, which this artifact addresses."
 
@@ -131,7 +131,7 @@ Return only valid JSON, no preamble, no markdown code fences:
       "what_to_build": "2-3 sentences of concrete scope. What exactly do they build? What does 'done' look like?",
       "citations": [
         {
-          "source": "job_post | company_github | company_blog | hn | candidate_github",
+          "source": "job_post | company_github | company_blog | hn | candidate_proof",
           "repo_name": "owner/repo (only for company_github)",
           "release_tag": "v1.2.3 (optional, only for company_github)",
           "post_title": "verbatim title (only for company_blog)",
@@ -139,7 +139,7 @@ Return only valid JSON, no preamble, no markdown code fences:
           "hn_thread_title": "verbatim title (only for hn)",
           "hn_thread_url": "verbatim url (only for hn)",
           "job_post_quote": "verbatim ≤140 char quote (only for job_post)",
-          "candidate_repo": "repo name (only for candidate_github)",
+          "candidate_claim": "claim id from the proof graph, e.g. \"c3\" (only for candidate_proof)",
           "relevance": "one sentence on why this source drove this idea"
         }
       ]
@@ -231,7 +231,7 @@ ${blog || "No blog signal available"}
 === COMMUNITY DISCUSSION (HN) ===
 ${hn || "No HN signal available"}
 
-=== CANDIDATE GITHUB ===
+=== CANDIDATE PROOF GRAPH ===
 ${candidate || "(none provided)"}${extra ? `\n\n=== ADDITIONAL INSTRUCTION ===\n${extra}` : ""}`;
 }
 
@@ -263,7 +263,7 @@ ${job || "(none provided)"}
 === COMPANY GITHUB ===
 ${company || "(none provided)"}
 
-=== CANDIDATE GITHUB ===
+=== CANDIDATE PROOF GRAPH ===
 ${candidate || "(none provided)"}
 
 === CHOSEN ARTIFACT IDEA ===

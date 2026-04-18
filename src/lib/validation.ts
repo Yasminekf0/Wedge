@@ -9,14 +9,14 @@ import type {
 import type { CompanySignal } from "@/lib/github";
 import type { BlogSignal } from "@/lib/blog";
 import type { HNSignal } from "@/lib/hn";
-import type { CandidateProof } from "@/lib/github";
+import type { CandidateClaimRef } from "@/lib/candidateFromProfile";
 
 export interface ValidationSources {
   companySignal: CompanySignal | null;
   blogSignal: BlogSignal | null;
   hnSignal: HNSignal | null;
   jobPostMarkdown: string;
-  candidateProfile: CandidateProof | null;
+  candidateClaims: CandidateClaimRef[];
 }
 
 // ---------- helpers ----------
@@ -103,14 +103,14 @@ function validateJobPost(c: Citation, jobPostMarkdown: string): boolean {
   return haystack.includes(needle);
 }
 
-function validateCandidateGithub(
+function validateCandidateProof(
   c: Citation,
-  proof: CandidateProof | null,
+  claims: CandidateClaimRef[],
 ): boolean {
-  if (!proof) return false;
-  if (!c.candidate_repo) return false;
-  const target = norm(repoBaseName(c.candidate_repo));
-  return proof.topRepos.some((r) => norm(r.name) === target);
+  if (!claims || claims.length === 0) return false;
+  if (!c.candidate_claim) return false;
+  const target = norm(c.candidate_claim);
+  return claims.some((cl) => norm(cl.id) === target);
 }
 
 function isValidCitation(c: Citation, sources: ValidationSources): boolean {
@@ -124,8 +124,8 @@ function isValidCitation(c: Citation, sources: ValidationSources): boolean {
       return validateHN(c, sources.hnSignal);
     case "job_post":
       return validateJobPost(c, sources.jobPostMarkdown);
-    case "candidate_github":
-      return validateCandidateGithub(c, sources.candidateProfile);
+    case "candidate_proof":
+      return validateCandidateProof(c, sources.candidateClaims);
     default:
       return false;
   }
@@ -159,7 +159,7 @@ function downgradeBridge(idea: ArtifactIdea): ArtifactPattern {
     case "job_post":
       next = "response";
       break;
-    case "candidate_github":
+    case "candidate_proof":
       next = "extension";
       break;
     default:
