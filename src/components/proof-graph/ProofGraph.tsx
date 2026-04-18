@@ -910,19 +910,12 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     return ids;
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
 
-  // Expansion state. When a job loads, all matched claims auto-expand; the
-  // user can still manually open/close any card on top of that.
-  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(
-    () => new Set(jobMatchedIds),
-  );
-
-  React.useEffect(() => {
-    setExpandedIds(new Set(jobMatchedIds));
-  }, [jobMatchedIds]);
+  // Selection: only one claim open in the side panel at a time.
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const { claims, sections, height: boardHeight } = React.useMemo(
-    () => autoLayout(arrangedClaims, expandedIds),
-    [arrangedClaims, expandedIds],
+    () => autoLayout(arrangedClaims),
+    [arrangedClaims],
   );
 
   // Filters: when a job is loaded, the rearrangement IS the signal — don't
@@ -949,22 +942,24 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     setActiveFilters(new Set());
   }, []);
 
-  const toggleClaim = React.useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const selectClaim = React.useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
   }, []);
+
+  const closePanel = React.useCallback(() => setSelectedId(null), []);
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setExpandedIds(new Set());
+      if (e.key === "Escape") setSelectedId(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const selectedClaim = React.useMemo(
+    () => claims.find((c) => c.id === selectedId) ?? null,
+    [claims, selectedId],
+  );
 
   const sparse = claims.length < 5;
 
@@ -980,8 +975,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
       {sparse ? (
         <SparseList
           claims={claims}
-          expandedIds={expandedIds}
-          onToggle={toggleClaim}
+          onSelect={selectClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
         />
@@ -990,13 +984,18 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
           claims={claims}
           sections={sections}
           boardHeight={boardHeight}
-          expandedIds={expandedIds}
-          onToggle={toggleClaim}
+          selectedId={selectedId}
+          onSelect={selectClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
           jobMatchedIds={jobMatchedIds}
         />
       )}
+      <ClaimDetailPanel
+        claim={selectedClaim}
+        filterLabelById={filterLabelById}
+        onClose={closePanel}
+      />
     </div>
   );
 }
