@@ -19,6 +19,8 @@ import {
   type CompanySignal,
   type ResolvedOrg,
 } from "@/lib/github";
+import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
+import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 
 export const Route = createFileRoute("/")({
@@ -104,6 +106,8 @@ function WedgePage() {
     "idle" | "loading" | "missing" | "ready"
   >("idle");
   const [company, setCompany] = React.useState<CompanySignal | null>(null);
+  const [blog, setBlog] = React.useState<BlogSignal | null>(null);
+  const [hn, setHn] = React.useState<HNSignal | null>(null);
   const [rateLow, setRateLow] = React.useState(false);
 
   const [proofState, setProofState] = React.useState<
@@ -165,6 +169,8 @@ function WedgePage() {
     jobMarkdown: string,
     c: CompanySignal | null,
     p: CandidateProof | null,
+    b: BlogSignal | null,
+    h: HNSignal | null,
   ) {
     let firstIdea: ArtifactIdea | null = null;
     try {
@@ -173,6 +179,8 @@ function WedgePage() {
           mode: "ideas",
           jobMarkdown,
           companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+          blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
+          hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
           candidateSummary: summariseCandidate(p),
         },
       });
@@ -210,6 +218,8 @@ function WedgePage() {
 
     setCompanyState("idle");
     setCompany(null);
+    setBlog(null);
+    setHn(null);
     setProofState(ghTrim ? "loading" : "skipped");
     setProof(null);
     setJobMd("");
@@ -300,13 +310,56 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const [c, p] = await Promise.all([companyP, proofP]);
+    // Blog + HN: kick off in parallel. Domain is best-effort: prefer the
+    // org's `blog` field once company resolves, otherwise fall back to the
+    // job post URL's host.
+    const jobDomain = extractDomain(jobUrl);
+    const blogP: Promise<BlogSignal | null> = extractedName
+      ? companyP
+          .then((c) =>
+            fetchCompanyBlog({
+              companyName: extractedName!,
+              orgBlogUrl: c?.org.blog ?? null,
+              orgWebsiteDomain:
+                extractDomain(c?.org.blog ?? null) || jobDomain,
+            }),
+          )
+          .then((b) => {
+            setBlog(b);
+            return b;
+          })
+          .catch((e) => {
+            console.error("blog fetch failed", e);
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const hnP: Promise<HNSignal | null> = extractedName
+      ? companyP
+          .then((c) =>
+            fetchHNSignal({
+              companyName: extractedName!,
+              orgWebsiteDomain:
+                extractDomain(c?.org.blog ?? null) || jobDomain,
+            }),
+          )
+          .then((h) => {
+            setHn(h);
+            return h;
+          })
+          .catch((e) => {
+            console.error("hn fetch failed", e);
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const [c, p, b, h] = await Promise.all([companyP, proofP, blogP, hnP]);
 
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
     // ---------- Step 2: ideas + email ----------
-    await runIdeasAndEmail(jobMarkdown, c, p);
+    await runIdeasAndEmail(jobMarkdown, c, p, b, h);
     setLoading(false);
   }
 
@@ -324,6 +377,8 @@ function WedgePage() {
     setEmailError(false);
     setCompanyState("loading");
     setCompany(null);
+    setBlog(null);
+    setHn(null);
 
     let c: CompanySignal | null = null;
     try {
@@ -346,10 +401,36 @@ function WedgePage() {
       name: c?.org.name ?? h,
     });
 
+    // Re-fetch blog + HN against the corrected org/domain in parallel.
+    const jobDomain = extractDomain(jobUrl);
+    const nameForFetch = companyName || c?.org.name || h;
+    const domainForFetch = extractDomain(c?.org.blog ?? null) || jobDomain;
+    const [b, hSig] = await Promise.all([
+      fetchCompanyBlog({
+        companyName: nameForFetch,
+        orgBlogUrl: c?.org.blog ?? null,
+        orgWebsiteDomain: domainForFetch,
+      })
+        .then((x) => {
+          setBlog(x);
+          return x;
+        })
+        .catch(() => null),
+      fetchHNSignal({
+        companyName: nameForFetch,
+        orgWebsiteDomain: domainForFetch,
+      })
+        .then((x) => {
+          setHn(x);
+          return x;
+        })
+        .catch(() => null),
+    ]);
+
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
-    await runIdeasAndEmail(jobMd, c, proof);
+    await runIdeasAndEmail(jobMd, c, proof, b, hSig);
     setLoading(false);
   }
 
@@ -361,6 +442,8 @@ function WedgePage() {
           mode: "ideas",
           jobMarkdown: jobMd,
           companySignalJson: company ? JSON.stringify(company, null, 2) : "",
+          blogSignalJson: blog ? JSON.stringify(blog, null, 2) : "",
+          hnSignalJson: hn ? JSON.stringify(hn, null, 2) : "",
           candidateSummary: summariseCandidate(proof),
         },
       });
@@ -518,7 +601,7 @@ function WedgePage() {
                   No public GitHub org found for @{resolved?.handle ?? handleOverride}.
                 </p>
               ) : company ? (
-                <CompanySignalView signal={company} rateLow={rateLow} />
+                <CompanySignalView signal={company} blog={blog} hn={hn} rateLow={rateLow} />
               ) : null}
             </Section>
           )}

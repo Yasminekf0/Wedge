@@ -36,6 +36,8 @@ interface CallInput {
   // JSON-serialized strings sent from the client so we don't have to redeclare
   // the full type tree on the server.
   companySignalJson?: string; // "" if none
+  blogSignalJson?: string; // "" if none
+  hnSignalJson?: string; // "" if none
   candidateSummary?: string; // "" if none
   // For email mode:
   ideaJson?: string;
@@ -49,18 +51,26 @@ const EXTRACT_SYSTEM = `Extract the company name from this job post. Return only
 
 const IDEAS_SYSTEM = `You are helping a developer generate artifact ideas for cold outreach to a company. An "artifact" is something small (2–8 hours of work) that a candidate can build or write to earn a response from a hiring manager or engineering leader. The artifact should reference something specific the company has published or built — not generic.
 
-You will receive three sources of context:
-1. The full job post markdown
-2. The company's GitHub org activity (recent repos, releases, languages)
-3. The candidate's GitHub profile (their top repos, languages, stars)
+You will receive up to five sources of context:
+1. The full job post markdown (always present)
+2. The company's GitHub org activity — recent repos, releases, languages (usually present)
+3. The company's recent engineering blog posts (sometimes present — may include recruiting posts or low-signal content, use judgment)
+4. Hacker News threads about the company (rarely present, but when present these have been pre-filtered for quality — treat them as high-signal)
+5. The candidate's GitHub profile (always present)
 
 Your job: propose exactly 3 artifact ideas. Each idea must:
-- Reference something specific from source 1 or 2 (cite it in why_it_lands)
-- Be plausibly achievable by the candidate given their skills from source 3
+- Reference something specific from sources 1–4 (cite it in why_it_lands)
+- Be plausibly achievable by the candidate given their skills from source 5
 - Take 2–8 hours
 - Fall into one of these patterns: teardown, contribution, extension, response, bridge, benchmark, translation, missing piece, steelman
 
 The BEST ideas bridge two sources — e.g. "you said X in the job post, your repo Y does Z, here's an artifact connecting them."
+
+Source weighting:
+- Prefer specificity over coverage. One artifact idea that drills deep into the strongest signal beats three shallow ideas that each cite a different source.
+- Engineering blog posts are useful when they're technical (architecture decisions, postmortems, deep dives). Ignore blog posts that are clearly recruiting or PR content ("meet our new VP", "we're hiring", generic thought leadership).
+- Hacker News comments reveal what technical users actually want that the company isn't delivering. When present, these are often the best source for "missing piece" or "bridge" pattern artifacts.
+- If a source is empty or thin, don't force an idea from it. It's fine if all 3 ideas cite the same source, as long as they cite different specific things within it.
 
 Avoid generic ideas (e.g. "write a blog post about their product"). Specificity is the entire point.
 
@@ -70,7 +80,7 @@ Return only valid JSON, no preamble, no markdown code fences:
     {
       "title": "short, concrete",
       "pattern": "one of: teardown | contribution | extension | response | bridge | benchmark | translation | missing_piece | steelman",
-      "why_it_lands": "one sentence citing the specific thing from the job post or company repos that makes this land",
+      "why_it_lands": "one sentence citing the specific thing from the job post, repos, blog, or HN that makes this land",
       "estimated_hours": integer 2-8,
       "what_to_build": "2-3 sentences of concrete scope. What exactly do they build? What does 'done' look like?"
     }
@@ -96,13 +106,21 @@ Return only valid JSON, no preamble:
 
 function ideasUser(input: CallInput) {
   const job = (input.jobMarkdown || "").slice(0, 14000);
-  const company = (input.companySignalJson || "").slice(0, 14000);
+  const company = (input.companySignalJson || "").slice(0, 12000);
+  const blog = (input.blogSignalJson || "").slice(0, 6000);
+  const hn = (input.hnSignalJson || "").slice(0, 6000);
   const candidate = (input.candidateSummary || "").slice(0, 4000);
   return `=== JOB POST ===
 ${job || "(none provided)"}
 
 === COMPANY GITHUB ===
 ${company || "(none provided)"}
+
+=== COMPANY BLOG ===
+${blog || "No blog signal available"}
+
+=== COMMUNITY DISCUSSION (HN) ===
+${hn || "No HN signal available"}
 
 === CANDIDATE GITHUB ===
 ${candidate || "(none provided)"}`;
