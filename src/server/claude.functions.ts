@@ -87,5 +87,6 @@ export const callClaude = createServerFn({ method: "POST" })
     const text =
       json.content?.filter((c) => c.type === "text").map((c) => c.text || "").join("\n") || "";
 
-    return extractJson(text);
+    const parsed = extractJson(text) as Record<string, unknown>;
+    return parsed;
   });
