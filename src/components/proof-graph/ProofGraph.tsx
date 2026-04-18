@@ -843,6 +843,13 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     [arrangedClaims],
   );
 
+  const jobMatchedIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (profile.jobLoaded) {
+      for (const c of profile.claims) if (isJobMatch(c)) ids.add(c.id);
+    }
+    return ids;
+  }, [profile.claims, profile.jobLoaded, isJobMatch]);
   // Filters: when a job is loaded, the rearrangement IS the signal — don't
   // also dim. Filter chips remain interactive for manual refinement.
   const [activeFilters, setActiveFilters] = React.useState<Set<string>>(
