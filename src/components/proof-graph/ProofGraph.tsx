@@ -820,20 +820,16 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     [profile.jobLoaded, jobFilterIds],
   );
 
-  // When a job is loaded, rearrange the board: matched claims get promoted
-  // (size lg, listed first inside their section) and unmatched claims get
-  // demoted (size sm, listed last). Layout flows them so matches naturally
-  // occupy the top-left / center, unmatched ones drift to the edges.
+  // When a job is loaded, keep all cards the same size but reorder so matched
+  // claims flow first inside their section (taking the prominent top-left
+  // slots). Highlighting + auto-expand do the visual work.
   const arrangedClaims = React.useMemo(() => {
     if (!profile.jobLoaded) return profile.claims;
     const matched: Claim[] = [];
     const rest: Claim[] = [];
     for (const c of profile.claims) {
-      if (isJobMatch(c)) {
-        matched.push({ ...c, size: "lg" });
-      } else {
-        rest.push({ ...c, size: "sm" });
-      }
+      if (isJobMatch(c)) matched.push(c);
+      else rest.push(c);
     }
     return [...matched, ...rest];
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
