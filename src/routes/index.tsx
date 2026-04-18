@@ -802,23 +802,57 @@ function WedgePage() {
                 <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
                   {email.body}
                 </pre>
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <button
                     type="button"
                     onClick={copyEmail}
-                    className="mono h-9 rounded-md bg-accent px-4 text-[12px] font-medium uppercase tracking-wider text-accent-fg transition-opacity hover:opacity-90"
+                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
                   >
                     {copied ? "Copied" : "Copy"}
                   </button>
                   <button
                     type="button"
+                    onClick={copySubject}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
+                  >
+                    {copiedSubject ? "Copied subject" : "Copy subject"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={regenerateEmail}
                     disabled={emailLoading}
-                    className="mono h-9 rounded-md border border-border bg-transparent px-4 text-[12px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-muted-fg disabled:opacity-60"
+                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
                   >
-                    {emailLoading ? "Working..." : "Regenerate"}
+                    {emailLoading
+                      ? emailStage === "rewriting"
+                        ? "Rewriting..."
+                        : emailStage === "checking"
+                          ? "Verifying voice..."
+                          : "Working..."
+                      : "Regenerate"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={regenerateBlunter}
+                    disabled={emailLoading}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    Blunter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={regenerateWarmer}
+                    disabled={emailLoading}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    Warmer
                   </button>
                 </div>
+                {slopHint && (
+                  <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
+                    {slopHint}
+                  </p>
+                )}
               </div>
             )}
           </Section>
