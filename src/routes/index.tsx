@@ -126,6 +126,7 @@ function WedgePage() {
   const [jobUrl, setJobUrl] = React.useState("");
   const [ghUser, setGhUser] = React.useState("");
   const [target, setTarget] = React.useState("");
+  const [pitch, setPitch] = React.useState("");
   const [urlError, setUrlError] = React.useState<string | null>(null);
 
   const [loading, setLoading] = React.useState(false);
@@ -201,15 +202,29 @@ function WedgePage() {
     setSlopHint(null);
     setEmailStage("drafting");
     const voiceInstruction = instructionForMode(mode);
+    const candidateName = p?.user?.name || p?.user?.login || "";
+    const baseData = {
+      mode: "email" as const,
+      jobMarkdown,
+      companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+      candidateSummary: summariseCandidate(p),
+      ideaJson: JSON.stringify(idea, null, 2),
+      companyName: companyName || c?.org?.name || "",
+      targetName: target.trim(),
+      candidatePitch: pitch.trim(),
+      candidateName,
+    };
+    // Best-effort role title for the slop filter — first ~6 words from job post H1.
+    const roleTitle =
+      jobMarkdown
+        .split("\n")
+        .map((l) => l.trim())
+        .find((l) => l.startsWith("# "))
+        ?.replace(/^#\s+/, "")
+        .split(/\s+/)
+        .slice(0, 6)
+        .join(" ") || "";
     try {
-      const baseData = {
-        mode: "email" as const,
-        jobMarkdown,
-        companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-        candidateSummary: summariseCandidate(p),
-        ideaJson: JSON.stringify(idea, null, 2),
-      };
-
       const res = await callClaudeFn({
         data: voiceInstruction
           ? { ...baseData, extraUserInstruction: voiceInstruction }
@@ -221,7 +236,11 @@ function WedgePage() {
 
       // Slop filter — one-shot correction loop.
       setEmailStage("checking");
-      const violations = detectSlop(draft, { mode });
+      const violations = detectSlop(draft, {
+        mode,
+        companyName: baseData.companyName,
+        roleTitle,
+      });
       if (violations.length > 0) {
         setEmailStage("rewriting");
         try {
@@ -236,7 +255,11 @@ function WedgePage() {
           });
           if (res2.mode === "email") {
             draft = { subject: res2.subject, body: res2.body };
-            const second = detectSlop(draft, { mode });
+            const second = detectSlop(draft, {
+              mode,
+              companyName: baseData.companyName,
+              roleTitle,
+            });
             if (second.length > 0) {
               setSlopHint(
                 "Draft may still read slightly generic — tap Regenerate or edit before sending.",
@@ -709,10 +732,17 @@ function WedgePage() {
           placeholder="torvalds"
         />
         <Field
-          label="Target (optional)"
+          label="Target name (optional)"
           value={target}
           onChange={setTarget}
           placeholder="VP Eng, hiring manager, etc."
+        />
+        <Field
+          label="Your 1-line pitch"
+          value={pitch}
+          onChange={setPitch}
+          placeholder="e.g. backend engineer, 6 years, distributed systems"
+          hint="Optional — skip if you'd rather the email not include a self-intro."
         />
 
         <button
