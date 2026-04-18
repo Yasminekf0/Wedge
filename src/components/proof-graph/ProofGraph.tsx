@@ -613,8 +613,8 @@ interface BoardProps {
   claims: Claim[];
   sections: Array<{ section: ClaimSection; y: number }>;
   boardHeight: number;
-  expandedIds: Set<string>;
-  onToggle: (id: string) => void;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
   jobMatchedIds: Set<string>;
@@ -624,8 +624,8 @@ function PannableBoard({
   claims,
   sections,
   boardHeight,
-  expandedIds,
-  onToggle,
+  selectedId,
+  onSelect,
   activeFilters,
   filterLabelById,
   jobMatchedIds,
