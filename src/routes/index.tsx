@@ -189,12 +189,13 @@ function WedgePage() {
     p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
-    voiceInstruction?: string,
+    mode: SlopMode = "default",
   ) {
     setEmailError(false);
     setEmailLoading(true);
     setSlopHint(null);
     setEmailStage("drafting");
+    const voiceInstruction = instructionForMode(mode);
     try {
       const baseData = {
         mode: "email" as const,
@@ -215,13 +216,13 @@ function WedgePage() {
 
       // Slop filter — one-shot correction loop.
       setEmailStage("checking");
-      const violations = detectSlop(draft);
+      const violations = detectSlop(draft, { mode });
       if (violations.length > 0) {
         setEmailStage("rewriting");
         try {
           const fixInstruction = [
             voiceInstruction || "",
-            slopRegenInstruction(violations),
+            slopRegenInstruction(violations, { mode }),
           ]
             .filter(Boolean)
             .join("\n\n");
@@ -230,7 +231,7 @@ function WedgePage() {
           });
           if (res2.mode === "email") {
             draft = { subject: res2.subject, body: res2.body };
-            const second = detectSlop(draft);
+            const second = detectSlop(draft, { mode });
             if (second.length > 0) {
               setSlopHint(
                 "Draft may still read slightly generic — tap Regenerate or edit before sending.",
