@@ -601,7 +601,7 @@ function WedgePage() {
                   No public GitHub org found for @{resolved?.handle ?? handleOverride}.
                 </p>
               ) : company ? (
-                <CompanySignalView signal={company} rateLow={rateLow} />
+                <CompanySignalView signal={company} blog={blog} hn={hn} rateLow={rateLow} />
               ) : null}
             </Section>
           )}
