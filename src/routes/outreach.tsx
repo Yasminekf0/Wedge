@@ -12,11 +12,9 @@ import {
   SkeletonRows,
 } from "@/components/wedge/primitives";
 import {
-  fetchCandidateProof,
   fetchCompanySignal,
   getRateLimitRemaining,
   resolveGitHubOrg,
-  type CandidateProof,
   type CompanySignal,
   type ResolvedOrg,
 } from "@/lib/github";
@@ -25,9 +23,11 @@ import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
 import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilter";
+import { candidateSummaryFromProfile } from "@/lib/candidateFromProfile";
 
-// Sasha's GitHub handle — derived identity, no longer a user input.
-const SASHA_GH = "sashazyuzin";
+// Candidate identity is sourced from the proof graph, not a live GitHub fetch.
+const CANDIDATE_SUMMARY = candidateSummaryFromProfile(exampleProfile);
+const CANDIDATE_FIRST_NAME = exampleProfile.header.name.split(" ")[0] || "";
 
 // ---------- voice modes ----------
 
@@ -108,24 +108,6 @@ async function fetchJobMarkdown(url: string): Promise<string> {
   return res.text();
 }
 
-function summariseCandidate(p: CandidateProof | null): string {
-  if (!p) return "(no public GitHub profile available)";
-  const repos = p.topRepos
-    .slice(0, 5)
-    .map(
-      (r) =>
-        `- ${r.name} (★${r.stargazers_count}, ${r.language || "unknown"}): ${r.description || "no description"}`,
-    )
-    .join("\n");
-  return `Handle: @${p.user.login}
-Followers: ${p.user.followers}
-Public repos: ${p.user.public_repos}
-Total stars: ${p.totalStars}
-Top languages overall: ${p.topLanguages.join(", ") || "—"}
-Top repos:
-${repos || "—"}`;
-}
-
 const RESOLVE_LABEL: Record<Exclude<ResolveStage, "idle" | "done">, string> = {
   reading: "RESOLVING · reading job post",
   identifying: "RESOLVING · identifying company",
@@ -164,10 +146,6 @@ function WedgePage() {
   const [hn, setHn] = React.useState<HNSignal | null>(null);
   const [rateLow, setRateLow] = React.useState(false);
 
-  const [proofState, setProofState] = React.useState<
-    "idle" | "loading" | "missing" | "skipped" | "ready"
-  >("idle");
-  const [proof, setProof] = React.useState<CandidateProof | null>(null);
 
   const [jobMd, setJobMd] = React.useState<string>("");
   const [jobFailed, setJobFailed] = React.useState(false);
@@ -205,7 +183,6 @@ function WedgePage() {
 
   async function generateEmail(
     jobMarkdown: string,
-    p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
     mode: SlopMode = "default",
@@ -215,12 +192,12 @@ function WedgePage() {
     setSlopHint(null);
     setEmailStage("drafting");
     const voiceInstruction = instructionForMode(mode);
-    const candidateName = p?.user?.login || "";
+    const candidateName = CANDIDATE_FIRST_NAME;
     const baseData = {
       mode: "email" as const,
       jobMarkdown,
       companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-      candidateSummary: summariseCandidate(p),
+      candidateSummary: CANDIDATE_SUMMARY,
       ideaJson: JSON.stringify(idea, null, 2),
       companyName: companyName || c?.org?.name || "",
       targetName: target.trim(),
@@ -297,7 +274,6 @@ function WedgePage() {
   async function runIdeasAndEmail(
     jobMarkdown: string,
     c: CompanySignal | null,
-    p: CandidateProof | null,
     b: BlogSignal | null,
     h: HNSignal | null,
   ) {
@@ -308,7 +284,7 @@ function WedgePage() {
       blogSignal: b,
       hnSignal: h,
       jobPostMarkdown: jobMarkdown,
-      candidateProfile: p,
+      candidateProfile: null,
     };
     try {
       const res = await callClaudeFn({
@@ -318,7 +294,7 @@ function WedgePage() {
           companySignalJson: c ? JSON.stringify(c, null, 2) : "",
           blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
           hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
-          candidateSummary: summariseCandidate(p),
+          candidateSummary: CANDIDATE_SUMMARY,
         },
       });
       let validated: ArtifactIdea[] = [];
@@ -339,7 +315,7 @@ function WedgePage() {
               companySignalJson: c ? JSON.stringify(c, null, 2) : "",
               blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
               hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
-              candidateSummary: summariseCandidate(p),
+              candidateSummary: CANDIDATE_SUMMARY,
               extraUserInstruction: `Your previous response contained ideas with fabricated or unverifiable citations, which have been dropped. Generate ${need} more ideas, grounded only in the sources provided. Do not invent citations.`,
             },
           });
@@ -391,7 +367,7 @@ function WedgePage() {
     }
     setUrlError(null);
 
-    const ghTrim = SASHA_GH;
+    
 
     setHasResults(true);
     setLoading(true);
@@ -406,8 +382,6 @@ function WedgePage() {
     setCompany(null);
     setBlog(null);
     setHn(null);
-    setProofState("loading");
-    setProof(null);
     setJobMd("");
     setJobFailed(false);
     setIdeas(null);
@@ -480,22 +454,6 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const proofP: Promise<CandidateProof | null> = fetchCandidateProof(ghTrim)
-      .then((p) => {
-        if (!p) {
-          setProofState("missing");
-          return null;
-        }
-        setProof(p);
-        setProofState("ready");
-        return p;
-      })
-      .catch((e) => {
-        console.error(e);
-        setProofState("missing");
-        return null;
-      });
-
     // Blog + HN: kick off in parallel. Domain is best-effort: prefer the
     // org's `blog` field once company resolves, otherwise fall back to the
     // job post URL's host.
@@ -539,13 +497,13 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const [c, p, b, h] = await Promise.all([companyP, proofP, blogP, hnP]);
+    const [c, b, h] = await Promise.all([companyP, blogP, hnP]);
 
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
     // ---------- Step 2: ideas + email ----------
-    await runIdeasAndEmail(jobMarkdown, c, p, b, h);
+    await runIdeasAndEmail(jobMarkdown, c, b, h);
     setLoading(false);
   }
 
@@ -616,7 +574,7 @@ function WedgePage() {
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
-    await runIdeasAndEmail(jobMd, c, proof, b, hSig);
+    await runIdeasAndEmail(jobMd, c, b, hSig);
     setLoading(false);
   }
 
@@ -624,7 +582,7 @@ function WedgePage() {
     setIdeasError(false);
     setIdeas(null);
     setShortIdeasNote(null);
-    await runIdeasAndEmail(jobMd, company, proof, blog, hn);
+    await runIdeasAndEmail(jobMd, company, blog, hn);
   }
 
   // The currently-selected idea, or null when none picked.
@@ -642,18 +600,18 @@ function WedgePage() {
     requestAnimationFrame(() => {
       outreachRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    await generateEmail(jobMd, proof, company, ideas[i], "default");
+    await generateEmail(jobMd, company, ideas[i], "default");
   }
 
   async function regenerateEmail() {
     if (!selectedIdea) return;
-    await generateEmail(jobMd, proof, company, selectedIdea, voiceMode);
+    await generateEmail(jobMd, company, selectedIdea, voiceMode);
   }
 
   async function setMode(next: SlopMode) {
     if (!selectedIdea) return;
     setVoiceMode(next);
-    await generateEmail(jobMd, proof, company, selectedIdea, next);
+    await generateEmail(jobMd, company, selectedIdea, next);
   }
 
   async function copyEmail() {
