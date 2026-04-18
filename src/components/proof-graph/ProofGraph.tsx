@@ -542,6 +542,7 @@ interface BoardProps {
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
+  jobMatchedIds: Set<string>;
 }
 
 function PannableBoard({
@@ -552,6 +553,7 @@ function PannableBoard({
   onToggle,
   activeFilters,
   filterLabelById,
+  jobMatchedIds,
 }: BoardProps) {
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const [tx, setTx] = React.useState(0);
