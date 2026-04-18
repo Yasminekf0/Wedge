@@ -19,6 +19,28 @@ export interface Evidence {
   logo?: string;
 }
 
+export interface ClaimMetric {
+  label: string;
+  value: string;
+}
+
+export interface ClaimDetails {
+  /** Longer narrative shown at the top of the side panel. */
+  story?: string;
+  /** Quick stat tiles: stars, users, latency, etc. */
+  metrics?: ClaimMetric[];
+  /** Bullet list of specific highlights. */
+  highlights?: string[];
+  /** Tech stack badges. */
+  stack?: string[];
+  /** Date or date range, e.g. "Aug 2023 — present" or "Summer 2019". */
+  timeline?: string;
+  /** Current status, e.g. "Live", "Archived", "In progress". */
+  status?: string;
+  /** Optional pull-quote. */
+  quote?: { text: string; attribution?: string };
+}
+
 export interface Claim {
   id: string;
   /** Short, declarative sentence. The headline of the card. */
@@ -29,6 +51,8 @@ export interface Claim {
   /** Filter ids this claim matches. */
   tags: string[];
   evidence: Evidence[];
+  /** Rich, varied side-panel content. */
+  details?: ClaimDetails;
   /**
    * Optional absolute position on the board (in px). If omitted, the layout
    * pass auto-places the claim within its section zone.
