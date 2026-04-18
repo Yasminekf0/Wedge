@@ -23,7 +23,37 @@ import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
-import { detectSlop, slopRegenInstruction } from "@/lib/slopFilter";
+import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilter";
+
+// ---------- voice modes ----------
+
+const BLUNTER_INSTRUCTION = `Rewrite this as a single paragraph. 40-70 words total. No three-paragraph structure. No separate greeting or signoff line — it's one continuous block.
+
+Keep exactly: (1) the specific reference from the citations, (2) what the candidate built/is building, (3) the proof graph link. Cut everything else. Cut hedges, cut pleasantries, cut setup sentences.
+
+The email should feel like it was dashed off in 90 seconds. Short sentences. No adverbs. No em-dashes (still banned). No tidy closer. End on the concrete next step or the link, whichever is later.
+
+Even in single-paragraph mode, the proof graph link must be introduced in plain terms before the URL. A one-clause intro is enough: "instead of a CV, here's the proof graph with code behind every claim: {proof-graph-url}". Do not drop the URL naked.
+
+Still return the same JSON shape: { subject, body }. Body is one paragraph, no \\n\\n breaks.`;
+
+const WARMER_INSTRUCTION = `Rewrite this keeping the three-paragraph structure, but add a specific sentence expressing genuine interest in what the company is working on.
+
+Rules for the appreciation sentence:
+- It goes in paragraph 1, after the specific citation reference.
+- It must name the thing the candidate finds interesting, specifically. Not "I love what you're doing" (meaningless). Something like "The direction you're taking with {specific thing from the citations or company signal} is one of the more interesting bets in {their actual space, named specifically}."
+- One sentence maximum. No gushing. No "I've been a huge fan". No "passionate", "excited", "thrilled" (all banned anyway).
+- The sentence must feel earned — it follows a specific observation, not replaces one.
+
+The rest of the email stays peer-to-peer. Warmer does NOT mean sycophantic. It means: add one line that admits you actually care about their work, grounded in a specific thing.
+
+Keep all other rules: no em-dashes, no banned vocabulary, no tidy closer, 90-140 words in body. Paragraph 3 still introduces the proof graph in plain terms before the URL.`;
+
+function instructionForMode(mode: SlopMode): string | undefined {
+  if (mode === "blunter") return BLUNTER_INSTRUCTION;
+  if (mode === "warmer") return WARMER_INSTRUCTION;
+  return undefined;
+}
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
@@ -137,6 +167,13 @@ function WedgePage() {
   const [copied, setCopied] = React.useState(false);
   const [copiedSubject, setCopiedSubject] = React.useState(false);
 
+  // Artifact selection + voice mode
+  const [selectedIdeaIndex, setSelectedIdeaIndex] = React.useState<number | null>(
+    null,
+  );
+  const [voiceMode, setVoiceMode] = React.useState<SlopMode>("default");
+  const outreachRef = React.useRef<HTMLDivElement>(null);
+
   // Long-loading label timer
   React.useEffect(() => {
     if (!loading) {
@@ -152,12 +189,13 @@ function WedgePage() {
     p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
-    voiceInstruction?: string,
+    mode: SlopMode = "default",
   ) {
     setEmailError(false);
     setEmailLoading(true);
     setSlopHint(null);
     setEmailStage("drafting");
+    const voiceInstruction = instructionForMode(mode);
     try {
       const baseData = {
         mode: "email" as const,
@@ -178,13 +216,13 @@ function WedgePage() {
 
       // Slop filter — one-shot correction loop.
       setEmailStage("checking");
-      const violations = detectSlop(draft);
+      const violations = detectSlop(draft, { mode });
       if (violations.length > 0) {
         setEmailStage("rewriting");
         try {
           const fixInstruction = [
             voiceInstruction || "",
-            slopRegenInstruction(violations),
+            slopRegenInstruction(violations, { mode }),
           ]
             .filter(Boolean)
             .join("\n\n");
@@ -193,7 +231,7 @@ function WedgePage() {
           });
           if (res2.mode === "email") {
             draft = { subject: res2.subject, body: res2.body };
-            const second = detectSlop(draft);
+            const second = detectSlop(draft, { mode });
             if (second.length > 0) {
               setSlopHint(
                 "Draft may still read slightly generic — tap Regenerate or edit before sending.",
@@ -300,9 +338,9 @@ function WedgePage() {
       setIdeasStage("idle");
     }
 
-    if (firstIdea) {
-      await generateEmail(jobMarkdown, p, c, firstIdea);
-    }
+    // Selection drives outreach: do NOT auto-generate the email here.
+    // Section 04 stays empty until the user picks an artifact.
+    void firstIdea;
   }
 
   async function handleGenerate() {
@@ -335,6 +373,8 @@ function WedgePage() {
     setIdeasError(false);
     setEmail(null);
     setEmailError(false);
+    setSelectedIdeaIndex(null);
+    setVoiceMode("default");
 
     // ---------- Step 0a: Jina ----------
     let jobMarkdown = "";
@@ -548,31 +588,33 @@ function WedgePage() {
     await runIdeasAndEmail(jobMd, company, proof, blog, hn);
   }
 
+  // The currently-selected idea, or null when none picked.
+  const selectedIdea =
+    ideas && selectedIdeaIndex !== null ? ideas[selectedIdeaIndex] ?? null : null;
+
+  async function selectIdea(i: number) {
+    if (!ideas || i < 0 || i >= ideas.length) return;
+    setSelectedIdeaIndex(i);
+    // Reset to default mode whenever the artifact changes — modes are tied
+    // to a single drafting context.
+    setVoiceMode("default");
+    // Scroll Section 04 into view (small delay so the empty-state -> draft
+    // swap doesn't cause a jarring jump).
+    requestAnimationFrame(() => {
+      outreachRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    await generateEmail(jobMd, proof, company, ideas[i], "default");
+  }
+
   async function regenerateEmail() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(jobMd, proof, company, ideas[0]);
+    if (!selectedIdea) return;
+    await generateEmail(jobMd, proof, company, selectedIdea, voiceMode);
   }
 
-  async function regenerateBlunter() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(
-      jobMd,
-      proof,
-      company,
-      ideas[0],
-      "Make it 20% more direct. Cut hedges. Shorter sentences.",
-    );
-  }
-
-  async function regenerateWarmer() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(
-      jobMd,
-      proof,
-      company,
-      ideas[0],
-      "Keep the specificity but add a touch more warmth. One concrete human moment (a reaction, a minor aside). Not effusive.",
-    );
+  async function setMode(next: SlopMode) {
+    if (!selectedIdea) return;
+    setVoiceMode(next);
+    await generateEmail(jobMd, proof, company, selectedIdea, next);
   }
 
   async function copyEmail() {
@@ -772,7 +814,13 @@ function WedgePage() {
             ) : (
               <div className="space-y-10">
                 {ideas.map((idea, i) => (
-                  <IdeaBlock key={i} index={i + 1} idea={idea} />
+                  <IdeaBlock
+                    key={i}
+                    index={i + 1}
+                    idea={idea}
+                    selected={selectedIdeaIndex === i}
+                    onSelect={() => selectIdea(i)}
+                  />
                 ))}
                 {shortIdeasNote && (
                   <p className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
@@ -784,78 +832,110 @@ function WedgePage() {
           </Section>
 
           {/* Outreach Draft */}
-          <Section header={`${emailNum} / Outreach Draft`}>
-            {hideJobDriven ? (
-              <p className="text-[14px] text-muted-fg">
-                Couldn't read the job post. Check the URL?
-              </p>
-            ) : emailError ? (
-              <ErrorLine onRetry={regenerateEmail} />
-            ) : emailLoading || !email ? (
-              <SkeletonRows />
-            ) : (
-              <div>
-                <div className="flex flex-wrap items-baseline gap-x-3">
-                  <span className="label-mono">Subject:</span>
-                  <span className="text-[16px] text-foreground">{email.subject}</span>
+          <div ref={outreachRef}>
+            <Section header={`${emailNum} / Outreach Draft`}>
+              {hideJobDriven ? (
+                <p className="text-[14px] text-muted-fg">
+                  Couldn't read the job post. Check the URL?
+                </p>
+              ) : !selectedIdea && !email ? (
+                <p className="text-[15px] text-tertiary-fg">
+                  Pick an artifact above and the outreach drafts here.
+                </p>
+              ) : emailError ? (
+                <ErrorLine onRetry={regenerateEmail} />
+              ) : !email ? (
+                <SkeletonRows />
+              ) : (
+                <div className="relative">
+                  {emailLoading && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-end bg-background/60 pt-2 backdrop-blur-[1px]">
+                      <span className="mono text-[11px] uppercase tracking-wider text-muted-fg">
+                        {emailStage === "rewriting"
+                          ? "Rewriting..."
+                          : emailStage === "checking"
+                            ? "Verifying voice..."
+                            : "Working..."}
+                      </span>
+                    </div>
+                  )}
+                  <div className={emailLoading ? "opacity-60" : undefined}>
+                    <div className="flex flex-wrap items-baseline gap-x-3">
+                      <span className="label-mono">Subject:</span>
+                      <span className="text-[16px] text-foreground">
+                        {email.subject}
+                      </span>
+                    </div>
+                    <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
+                      {email.body}
+                    </pre>
+                    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <button
+                        type="button"
+                        onClick={copyEmail}
+                        className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
+                      >
+                        {copied ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={copySubject}
+                        className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
+                      >
+                        {copiedSubject ? "Copied subject" : "Copy subject"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={regenerateEmail}
+                        disabled={emailLoading}
+                        className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
+                      >
+                        {emailLoading
+                          ? emailStage === "rewriting"
+                            ? "Rewriting..."
+                            : emailStage === "checking"
+                              ? "Verifying voice..."
+                              : "Working..."
+                          : "Regenerate"}
+                      </button>
+                      <span className="mono text-[13px] text-tertiary-fg select-none">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setMode(voiceMode === "blunter" ? "default" : "blunter")}
+                        disabled={emailLoading}
+                        className={[
+                          "mono text-[13px] uppercase tracking-wider transition-colors disabled:opacity-40",
+                          voiceMode === "blunter"
+                            ? "text-accent underline underline-offset-4"
+                            : "text-tertiary-fg hover:text-foreground",
+                        ].join(" ")}
+                      >
+                        Blunter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMode(voiceMode === "warmer" ? "default" : "warmer")}
+                        disabled={emailLoading}
+                        className={[
+                          "mono text-[13px] uppercase tracking-wider transition-colors disabled:opacity-40",
+                          voiceMode === "warmer"
+                            ? "text-accent underline underline-offset-4"
+                            : "text-tertiary-fg hover:text-foreground",
+                        ].join(" ")}
+                      >
+                        Warmer
+                      </button>
+                    </div>
+                    {slopHint && (
+                      <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
+                        {slopHint}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
-                  {email.body}
-                </pre>
-                <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <button
-                    type="button"
-                    onClick={copyEmail}
-                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
-                  >
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copySubject}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
-                  >
-                    {copiedSubject ? "Copied subject" : "Copy subject"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateEmail}
-                    disabled={emailLoading}
-                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
-                  >
-                    {emailLoading
-                      ? emailStage === "rewriting"
-                        ? "Rewriting..."
-                        : emailStage === "checking"
-                          ? "Verifying voice..."
-                          : "Working..."
-                      : "Regenerate"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateBlunter}
-                    disabled={emailLoading}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    Blunter
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateWarmer}
-                    disabled={emailLoading}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    Warmer
-                  </button>
-                </div>
-                {slopHint && (
-                  <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
-                    {slopHint}
-                  </p>
-                )}
-              </div>
-            )}
-          </Section>
+              )}
+            </Section>
+          </div>
         </div>
       )}
     </main>

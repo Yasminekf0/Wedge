@@ -82,45 +82,81 @@ function CitationLine({ c }: { c: Citation }) {
   );
 }
 
-export function IdeaBlock({ index, idea }: { index: number; idea: ArtifactIdea }) {
+export function IdeaBlock({
+  index,
+  idea,
+  selected = false,
+  onSelect,
+}: {
+  index: number;
+  idea: ArtifactIdea;
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
   const [open, setOpen] = React.useState(false);
   const num = String(index).padStart(2, "0");
   const firstWords = idea.what_to_build.split(/\s+/).slice(0, 8).join(" ");
   const patternLabel = idea.pattern ? idea.pattern.replace(/_/g, " ") : "";
   const citations = idea.citations || [];
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="group block w-full cursor-pointer text-left">
-        <div className="flex flex-wrap items-baseline gap-x-4">
-          <span className="mono text-[12px] text-tertiary-fg">{num}</span>
-          <span className="text-[20px] font-medium text-foreground">{idea.title}</span>
-          {patternLabel && (
-            <span className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
-              {patternLabel}
-            </span>
-          )}
-        </div>
-        <p className="mt-2 pl-10 text-[15px] text-muted-fg">{idea.why_it_lands}</p>
-        <p className="mt-2 pl-10 mono text-[12px] text-tertiary-fg">
-          {idea.estimated_hours}h · {firstWords}
-          {idea.what_to_build.split(/\s+/).length > 8 ? "..." : ""}
-        </p>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pl-10">
-        <p className="mt-4 text-[15px] leading-relaxed text-foreground">
-          {idea.what_to_build}
-        </p>
-        {citations.length > 0 && (
-          <div className="mt-6 border-t border-border pt-3">
-            <div className="label-mono mb-3">Sources</div>
-            <div className="space-y-2">
-              {citations.map((c, i) => (
-                <CitationLine key={i} c={c} />
-              ))}
-            </div>
+    <div
+      className={[
+        "transition-[border-color,padding] duration-200",
+        selected ? "border-l-2 border-accent pl-4 -ml-4" : "border-l-2 border-transparent pl-4 -ml-4",
+      ].join(" ")}
+    >
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="group block w-full cursor-pointer text-left">
+          <div className="flex flex-wrap items-baseline gap-x-4">
+            <span className="mono text-[12px] text-tertiary-fg">{num}</span>
+            <span className="text-[20px] font-medium text-foreground">{idea.title}</span>
+            {patternLabel && (
+              <span className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
+                {patternLabel}
+              </span>
+            )}
+            {selected && (
+              <span className="mono text-[11px] uppercase tracking-wider text-accent">
+                selected
+              </span>
+            )}
           </div>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
+          <p className="mt-2 pl-10 text-[15px] text-muted-fg">{idea.why_it_lands}</p>
+          <p className="mt-2 pl-10 mono text-[12px] text-tertiary-fg">
+            {idea.estimated_hours}h · {firstWords}
+            {idea.what_to_build.split(/\s+/).length > 8 ? "..." : ""}
+          </p>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pl-10">
+          <p className="mt-4 text-[15px] leading-relaxed text-foreground">
+            {idea.what_to_build}
+          </p>
+          {citations.length > 0 && (
+            <div className="mt-6 border-t border-border pt-3">
+              <div className="label-mono mb-3">Sources</div>
+              <div className="space-y-2">
+                {citations.map((c, i) => (
+                  <CitationLine key={i} c={c} />
+                ))}
+              </div>
+            </div>
+          )}
+          {onSelect && (
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect();
+                }}
+                className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
+              >
+                {selected ? "drafting from this →" : "use this one →"}
+              </button>
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }

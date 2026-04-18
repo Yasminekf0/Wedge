@@ -133,7 +133,13 @@ function countWords(body: string): number {
 
 // ---------- detector ----------
 
-export function detectSlop(email: { subject: string; body: string }): SlopViolation[] {
+export type SlopMode = "default" | "blunter" | "warmer";
+
+export function detectSlop(
+  email: { subject: string; body: string },
+  opts: { mode?: SlopMode } = {},
+): SlopViolation[] {
+  const mode = opts.mode || "default";
   const violations: SlopViolation[] = [];
   const subject = email.subject || "";
   const body = email.body || "";
@@ -151,12 +157,10 @@ export function detectSlop(email: { subject: string; body: string }): SlopViolat
 
   // 2. Banned words / phrases.
   for (const phrase of BANNED_WORDS) {
-    // Multi-word phrases use substring match; single words use word boundary on root.
     let pattern: RegExp;
     if (phrase.includes(" ") || phrase.includes("-")) {
       pattern = new RegExp(escapeRegex(phrase), "i");
     } else {
-      // Match the root and any trailing word chars (e.g. "explore" → "explored", "exploring").
       pattern = new RegExp(`\\b${escapeRegex(phrase)}\\w*`, "i");
     }
     const m = haystack.match(pattern);
@@ -177,7 +181,6 @@ export function detectSlop(email: { subject: string; body: string }): SlopViolat
     for (const transition of BANNED_TRANSITIONS) {
       const tFirst = transition.split(/\s+/)[0];
       if (firstWord.toLowerCase() === tFirst.toLowerCase()) {
-        // For multi-word transitions, also confirm the rest matches.
         if (sentence.toLowerCase().startsWith(transition.toLowerCase())) {
           violations.push({
             type: "banned_transition",
@@ -209,7 +212,7 @@ export function detectSlop(email: { subject: string; body: string }): SlopViolat
     });
   }
 
-  // 5. Tidy closing detection — check the last sentence of the body.
+  // 5. Tidy closing detection.
   const lastSentence = sentences[sentences.length - 1] || "";
   const lastLower = lastSentence.toLowerCase();
   for (const phrase of BANNED_CLOSINGS) {
@@ -219,24 +222,40 @@ export function detectSlop(email: { subject: string; body: string }): SlopViolat
         evidence: lastSentence,
         note: `Tidy closing detected ("${phrase}"). End on a concrete question, offer, or ask — not a warm wrap-up.`,
       });
-      break; // one closing flag is enough
+      break;
     }
   }
 
-  // 6. Length.
+  // 6. Length — bounds depend on the mode.
   const wc = countWords(body);
-  if (wc < 80) {
-    violations.push({
-      type: "length",
-      evidence: `${wc} words`,
-      note: `Body is too short (${wc} words). Aim for 90-130 words, with a hard floor at 80.`,
-    });
-  } else if (wc > 140) {
-    violations.push({
-      type: "length",
-      evidence: `${wc} words`,
-      note: `Body is too long (${wc} words). Cut to 90-130 words by removing the weakest sentence.`,
-    });
+  if (mode === "blunter") {
+    if (wc < 30) {
+      violations.push({
+        type: "length",
+        evidence: `${wc} words`,
+        note: `Body is too short for blunter mode (${wc} words). Aim for 40-80 words in a single paragraph.`,
+      });
+    } else if (wc > 90) {
+      violations.push({
+        type: "length",
+        evidence: `${wc} words`,
+        note: `Body is too long for blunter mode (${wc} words). Cut to 40-80 words. Single paragraph only.`,
+      });
+    }
+  } else {
+    if (wc < 80) {
+      violations.push({
+        type: "length",
+        evidence: `${wc} words`,
+        note: `Body is too short (${wc} words). Aim for 90-130 words, with a hard floor at 80.`,
+      });
+    } else if (wc > 140) {
+      violations.push({
+        type: "length",
+        evidence: `${wc} words`,
+        note: `Body is too long (${wc} words). Cut to 90-130 words by removing the weakest sentence.`,
+      });
+    }
   }
 
   // 7. Adverb -ly pileup.
@@ -256,7 +275,17 @@ export function detectSlop(email: { subject: string; body: string }): SlopViolat
 }
 
 // Build the regeneration instruction to append to the user message.
-export function slopRegenInstruction(violations: SlopViolation[]): string {
+export function slopRegenInstruction(
+  violations: SlopViolation[],
+  opts: { mode?: SlopMode } = {},
+): string {
+  const mode = opts.mode || "default";
   const lines = violations.map((v) => `- ${v.note} (offending: "${v.evidence}")`);
-  return `Your previous draft had these problems:\n\n${lines.join("\n")}\n\nRewrite the email fixing these specific issues. Keep the structure (subject, three paragraphs), keep the artifact reference, keep the proof graph link, keep the voice direct and specific. Do not add new AI-sounding language in the process of fixing the old one.\n\nReturn only valid JSON.`;
+  const structureReminder =
+    mode === "blunter"
+      ? "Keep the structure (single tight paragraph, 40-80 words, proof graph link still introduced in plain language before the URL)"
+      : mode === "warmer"
+        ? "Keep the structure (subject, three paragraphs, the specific appreciation sentence in paragraph 1, proof graph link with intro)"
+        : "Keep the structure (subject, three paragraphs)";
+  return `Your previous draft had these problems:\n\n${lines.join("\n")}\n\nRewrite the email fixing these specific issues. ${structureReminder}, keep the artifact reference, keep the proof graph link, keep the voice direct and specific. Do not add new AI-sounding language in the process of fixing the old one.\n\nReturn only valid JSON.`;
 }
