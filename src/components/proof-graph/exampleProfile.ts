@@ -31,7 +31,6 @@ export const exampleProfile: ProofProfile = {
       text: "Ships production Rust services handling 40k req/s.",
       tags: ["rust", "distributed", "production", "infra"],
       size: "lg",
-      position: { x: 60, y: 60 },
       evidence: [
         {
           type: "repo",
@@ -54,7 +53,6 @@ export const exampleProfile: ProofProfile = {
       text: "Built a real-time collab tool used by 200+ teams.",
       tags: ["frontend", "production", "distributed"],
       size: "md",
-      position: { x: 470, y: 110 },
       evidence: [
         {
           type: "repo",
@@ -71,7 +69,6 @@ export const exampleProfile: ProofProfile = {
       text: "Maintainer of a Rust crate with 1.2k stars.",
       tags: ["rust", "open-source"],
       size: "sm",
-      position: { x: 820, y: 60 },
       evidence: [
         {
           type: "repo",
@@ -88,7 +85,6 @@ export const exampleProfile: ProofProfile = {
       text: "Wrote a load balancer from scratch to learn consistent hashing.",
       tags: ["distributed", "go"],
       size: "md",
-      position: { x: 100, y: 330 },
       evidence: [
         {
           type: "repo",
@@ -110,7 +106,6 @@ export const exampleProfile: ProofProfile = {
       text: "Open-sourced a Postgres extension for time-series compaction.",
       tags: ["open-source", "infra", "production"],
       size: "md",
-      position: { x: 510, y: 360 },
       evidence: [
         {
           type: "repo",
@@ -127,7 +122,6 @@ export const exampleProfile: ProofProfile = {
       text: "Led infra rewrite at a Series B fintech, cut p99 by 60%.",
       tags: ["distributed", "infra", "production", "rust"],
       size: "lg",
-      position: { x: 60, y: 640 },
       evidence: [
         {
           type: "work",
@@ -144,7 +138,6 @@ export const exampleProfile: ProofProfile = {
       text: "Built the data platform team at a 30-person startup.",
       tags: ["infra", "production", "go"],
       size: "md",
-      position: { x: 510, y: 680 },
       evidence: [
         {
           type: "work",
@@ -161,7 +154,6 @@ export const exampleProfile: ProofProfile = {
       text: "TA'd the distributed systems course at university.",
       tags: ["teaching", "distributed"],
       size: "sm",
-      position: { x: 900, y: 660 },
       evidence: [
         {
           type: "work",
@@ -178,7 +170,6 @@ export const exampleProfile: ProofProfile = {
       text: "Studied CS at KTH, focused on distributed systems.",
       tags: ["distributed"],
       size: "md",
-      position: { x: 80, y: 940 },
       evidence: [
         {
           type: "education",
@@ -194,7 +185,6 @@ export const exampleProfile: ProofProfile = {
       text: "Self-taught Rust through Advent of Code and rewriting old projects.",
       tags: ["rust", "teaching"],
       size: "sm",
-      position: { x: 510, y: 960 },
       evidence: [
         {
           type: "link",
