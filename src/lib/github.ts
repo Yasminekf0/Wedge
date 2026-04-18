@@ -244,3 +244,124 @@ export async function fetchCompanySignal(
     aggregateLanguages,
   };
 }
+
+// ---------- org resolution cascade ----------
+
+export interface ResolvedOrg {
+  handle: string;
+  confidence: "high" | "medium";
+  /** Display name from GitHub if known. */
+  name?: string;
+}
+
+const resolveCache = new Map<string, ResolvedOrg | null>();
+
+const SUFFIX_RE =
+  /\b(inc\.?|labs?|ai|technologies|technology|tech|corp\.?|corporation|gmbh|ltd\.?|llc|sa|s\.a\.|co\.?|company)\b\.?$/i;
+
+export function slugifyCompany(name: string): string {
+  let s = name.trim();
+  // Strip trailing legal/marketing suffixes (run twice to catch e.g. "Foo Labs Inc.")
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(SUFFIX_RE, "").trim().replace(/[,;:]+$/, "");
+    if (next === s) break;
+    s = next;
+  }
+  // Lowercase, strip everything but a-z0-9
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function firstWord(s: string): string {
+  return (s.trim().split(/\s+/)[0] || "").toLowerCase();
+}
+
+interface OrgFull {
+  login: string;
+  name: string | null;
+  description: string | null;
+  public_repos: number;
+}
+
+async function getOrg(login: string): Promise<OrgFull | null> {
+  const res = await ghFetch(`/orgs/${encodeURIComponent(login)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  const j = (await res.json()) as OrgFull;
+  return j;
+}
+
+function orgMatchesCompany(org: OrgFull, companyName: string): boolean {
+  const fw = firstWord(companyName);
+  if (!fw) return false;
+  const name = (org.name || "").toLowerCase();
+  const desc = (org.description || "").toLowerCase();
+  return name.includes(fw) || desc.includes(fw);
+}
+
+interface SearchUserItem {
+  login: string;
+  type: string;
+}
+interface SearchUserResp {
+  items: SearchUserItem[];
+}
+
+export async function resolveGitHubOrg(
+  companyName: string,
+): Promise<ResolvedOrg | null> {
+  const key = companyName.trim().toLowerCase();
+  if (!key) return null;
+  if (resolveCache.has(key)) return resolveCache.get(key) ?? null;
+
+  // Attempt 1: direct slug
+  const slug = slugifyCompany(companyName);
+  if (slug) {
+    const org = await getOrg(slug);
+    if (org && orgMatchesCompany(org, companyName)) {
+      const result: ResolvedOrg = {
+        handle: org.login,
+        confidence: "high",
+        name: org.name || org.login,
+      };
+      resolveCache.set(key, result);
+      return result;
+    }
+  }
+
+  // Attempt 2: search
+  const searchRes = await ghFetch(
+    `/search/users?q=${encodeURIComponent(companyName)}+type:org&per_page=5`,
+  );
+  if (searchRes.ok) {
+    const sj = (await searchRes.json()) as SearchUserResp;
+    const candidates: Array<{ org: OrgFull; score: number }> = [];
+    for (const item of sj.items || []) {
+      const full = await getOrg(item.login);
+      if (!full) continue;
+      const lname = (full.name || "").toLowerCase();
+      const ldesc = (full.description || "").toLowerCase();
+      const cname = companyName.toLowerCase();
+      let score = 0;
+      if (lname === cname || lname.startsWith(cname)) score += 2;
+      if (ldesc.includes(cname)) score += 1;
+      if (full.public_repos > 10) score += 1;
+      if (full.public_repos === 0) score -= 2;
+      candidates.push({ org: full, score });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    if (best && best.score >= 2) {
+      const result: ResolvedOrg = {
+        handle: best.org.login,
+        confidence: "medium",
+        name: best.org.name || best.org.login,
+      };
+      resolveCache.set(key, result);
+      return result;
+    }
+  }
+
+  resolveCache.set(key, null);
+  return null;
+}
+

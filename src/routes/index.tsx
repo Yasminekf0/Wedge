@@ -14,8 +14,10 @@ import {
   fetchCandidateProof,
   fetchCompanySignal,
   getRateLimitRemaining,
+  resolveGitHubOrg,
   type CandidateProof,
   type CompanySignal,
+  type ResolvedOrg,
 } from "@/lib/github";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 
@@ -27,6 +29,13 @@ interface EmailDraft {
   subject: string;
   body: string;
 }
+
+type ResolveStage =
+  | "idle"
+  | "reading"
+  | "identifying"
+  | "finding"
+  | "done";
 
 // ---------- helpers ----------
 
@@ -64,6 +73,12 @@ Top repos:
 ${repos || "—"}`;
 }
 
+const RESOLVE_LABEL: Record<Exclude<ResolveStage, "idle" | "done">, string> = {
+  reading: "RESOLVING · reading job post",
+  identifying: "RESOLVING · identifying company",
+  finding: "RESOLVING · finding github org",
+};
+
 // ---------- page ----------
 
 function WedgePage() {
@@ -72,14 +87,17 @@ function WedgePage() {
   const [jobUrl, setJobUrl] = React.useState("");
   const [ghUser, setGhUser] = React.useState("");
   const [target, setTarget] = React.useState("");
-  const [companyOrg, setCompanyOrg] = React.useState("");
   const [urlError, setUrlError] = React.useState<string | null>(null);
 
   const [loading, setLoading] = React.useState(false);
   const [longLoading, setLongLoading] = React.useState(false);
   const [hasResults, setHasResults] = React.useState(false);
-  const [showCompanySection, setShowCompanySection] = React.useState(false);
-  const [orgLabel, setOrgLabel] = React.useState("");
+
+  // Resolution state
+  const [resolveStage, setResolveStage] = React.useState<ResolveStage>("idle");
+  const [resolved, setResolved] = React.useState<ResolvedOrg | null>(null);
+  const [companyName, setCompanyName] = React.useState<string | null>(null);
+  const [handleOverride, setHandleOverride] = React.useState("");
 
   // Per-source state
   const [companyState, setCompanyState] = React.useState<
@@ -143,95 +161,11 @@ function WedgePage() {
     }
   }
 
-  async function handleGenerate() {
-    if (!isValidUrl(jobUrl)) {
-      setUrlError("Needs a full URL starting with https://");
-      return;
-    }
-    setUrlError(null);
-
-    const orgTrim = companyOrg.trim();
-    const ghTrim = ghUser.trim();
-
-    setHasResults(true);
-    setLoading(true);
-    setShowCompanySection(orgTrim.length > 0);
-    setOrgLabel(orgTrim);
-    setRateLow(false);
-
-    setCompanyState(orgTrim ? "loading" : "idle");
-    setCompany(null);
-    setProofState(ghTrim ? "loading" : "skipped");
-    setProof(null);
-    setJobMd("");
-    setJobFailed(false);
-    setIdeas(null);
-    setIdeasError(false);
-    setEmail(null);
-    setEmailError(false);
-
-    // Kick off all three fetches in parallel.
-    const jobP = fetchJobMarkdown(jobUrl)
-      .then((md) => {
-        setJobMd(md);
-        return md;
-      })
-      .catch((e) => {
-        console.error(e);
-        setJobFailed(true);
-        return "";
-      });
-
-    const companyP = orgTrim
-      ? fetchCompanySignal(orgTrim)
-          .then((c) => {
-            if (!c) {
-              setCompanyState("missing");
-              return null;
-            }
-            setCompany(c);
-            setCompanyState("ready");
-            return c;
-          })
-          .catch((e) => {
-            console.error(e);
-            setCompanyState("missing");
-            return null;
-          })
-      : Promise.resolve(null);
-
-    const proofP = ghTrim
-      ? fetchCandidateProof(ghTrim)
-          .then((p) => {
-            if (!p) {
-              setProofState("missing");
-              return null;
-            }
-            setProof(p);
-            setProofState("ready");
-            return p;
-          })
-          .catch((e) => {
-            console.error(e);
-            setProofState("missing");
-            return null;
-          })
-      : Promise.resolve(null);
-
-    const [jobMarkdown, c, p] = await Promise.all([jobP, companyP, proofP]);
-
-    // After GitHub calls land, check rate limit.
-    const remaining = getRateLimitRemaining();
-    if (remaining !== null && remaining < 5) setRateLow(true);
-
-    // If the job post failed, hide sections 03/04 by leaving ideas null
-    // and surfacing the message via jobFailed.
-    if (!jobMarkdown) {
-      setLoading(false);
-      return;
-    }
-
-    // Ideas
+  async function runIdeasAndEmail(
+    jobMarkdown: string,
+    c: CompanySignal | null,
+    p: CandidateProof | null,
+  ) {
     let firstIdea: ArtifactIdea | null = null;
     try {
       const res = await callClaudeFn({
@@ -251,11 +185,172 @@ function WedgePage() {
       setIdeasError(true);
     }
 
-    setLoading(false);
-
     if (firstIdea) {
       await generateEmail(jobMarkdown, p, c, firstIdea);
     }
+  }
+
+  async function handleGenerate() {
+    if (!isValidUrl(jobUrl)) {
+      setUrlError("Needs a full URL starting with https://");
+      return;
+    }
+    setUrlError(null);
+
+    const ghTrim = ghUser.trim();
+
+    setHasResults(true);
+    setLoading(true);
+    setRateLow(false);
+
+    setResolveStage("reading");
+    setResolved(null);
+    setCompanyName(null);
+    setHandleOverride("");
+
+    setCompanyState("idle");
+    setCompany(null);
+    setProofState(ghTrim ? "loading" : "skipped");
+    setProof(null);
+    setJobMd("");
+    setJobFailed(false);
+    setIdeas(null);
+    setIdeasError(false);
+    setEmail(null);
+    setEmailError(false);
+
+    // ---------- Step 0a: Jina ----------
+    let jobMarkdown = "";
+    try {
+      jobMarkdown = await fetchJobMarkdown(jobUrl);
+      setJobMd(jobMarkdown);
+    } catch (e) {
+      console.error(e);
+      setJobFailed(true);
+      setResolveStage("idle");
+      setLoading(false);
+      return;
+    }
+
+    // ---------- Step 0b: extract company name ----------
+    setResolveStage("identifying");
+    let extractedName: string | null = null;
+    try {
+      const ext = await callClaudeFn({
+        data: { mode: "extract_company", jobMarkdown },
+      });
+      if (ext.mode === "extract_company") extractedName = ext.company;
+    } catch (e) {
+      console.error("extract_company failed", e);
+    }
+    setCompanyName(extractedName);
+
+    // ---------- Step 0c: resolve org ----------
+    let orgResolved: ResolvedOrg | null = null;
+    if (extractedName) {
+      setResolveStage("finding");
+      try {
+        orgResolved = await resolveGitHubOrg(extractedName);
+      } catch (e) {
+        console.error("resolveGitHubOrg failed", e);
+      }
+    }
+    setResolved(orgResolved);
+    setHandleOverride(orgResolved?.handle ?? "");
+    setResolveStage("done");
+
+    // ---------- Step 1: parallel fan-out ----------
+    if (orgResolved) {
+      setCompanyState("loading");
+    }
+
+    const companyP: Promise<CompanySignal | null> = orgResolved
+      ? fetchCompanySignal(orgResolved.handle)
+          .then((c) => {
+            if (!c) {
+              setCompanyState("missing");
+              return null;
+            }
+            setCompany(c);
+            setCompanyState("ready");
+            return c;
+          })
+          .catch((e) => {
+            console.error(e);
+            setCompanyState("missing");
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const proofP: Promise<CandidateProof | null> = ghTrim
+      ? fetchCandidateProof(ghTrim)
+          .then((p) => {
+            if (!p) {
+              setProofState("missing");
+              return null;
+            }
+            setProof(p);
+            setProofState("ready");
+            return p;
+          })
+          .catch((e) => {
+            console.error(e);
+            setProofState("missing");
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const [c, p] = await Promise.all([companyP, proofP]);
+
+    const remaining = getRateLimitRemaining();
+    if (remaining !== null && remaining < 5) setRateLow(true);
+
+    // ---------- Step 2: ideas + email ----------
+    await runIdeasAndEmail(jobMarkdown, c, p);
+    setLoading(false);
+  }
+
+  /**
+   * Re-fetch only company signal for a user-supplied handle, then regenerate
+   * ideas + email. Keeps job post and candidate profile in memory.
+   */
+  async function rerunWithHandle(handle: string) {
+    const h = handle.trim();
+    if (!h || !jobMd) return;
+    setLoading(true);
+    setIdeas(null);
+    setIdeasError(false);
+    setEmail(null);
+    setEmailError(false);
+    setCompanyState("loading");
+    setCompany(null);
+
+    let c: CompanySignal | null = null;
+    try {
+      c = await fetchCompanySignal(h);
+      if (!c) {
+        setCompanyState("missing");
+      } else {
+        setCompany(c);
+        setCompanyState("ready");
+      }
+    } catch (e) {
+      console.error(e);
+      setCompanyState("missing");
+    }
+
+    // Update the resolved indicator to reflect the user's correction.
+    setResolved({
+      handle: h,
+      confidence: "high",
+      name: c?.org.name ?? h,
+    });
+
+    const remaining = getRateLimitRemaining();
+    if (remaining !== null && remaining < 5) setRateLow(true);
+
+    await runIdeasAndEmail(jobMd, c, proof);
+    setLoading(false);
   }
 
   async function regenerateIdeas() {
@@ -292,6 +387,9 @@ function WedgePage() {
   }
 
   // Section numbering: company section is conditional.
+  // It renders if we have a resolved org OR a correction-prompt to show
+  // (which appears whenever resolveStage === "done" and we attempted resolution).
+  const showCompanySection = resolveStage === "done" || companyState !== "idle";
   const n = (i: number) => String(i).padStart(2, "0");
   let idx = 0;
   const companyNum = showCompanySection ? n(++idx) : "";
@@ -299,8 +397,28 @@ function WedgePage() {
   const ideasNum = n(++idx);
   const emailNum = n(++idx);
 
-  // Hide sections 03/04 when job post failed.
   const hideJobDriven = jobFailed;
+
+  // Inline correction input (used in three places).
+  const correctionInput = (
+    <span className="inline-flex items-center gap-2 align-middle">
+      <input
+        type="text"
+        value={handleOverride}
+        onChange={(e) => setHandleOverride(e.target.value)}
+        placeholder="org-handle"
+        className="mono h-7 w-[140px] rounded-sm border border-border bg-transparent px-2 text-[13px] text-foreground outline-none focus:border-muted-fg"
+      />
+      <button
+        type="button"
+        onClick={() => rerunWithHandle(handleOverride)}
+        disabled={loading || !handleOverride.trim()}
+        className="mono text-[12px] uppercase tracking-wider text-foreground underline-offset-4 hover:underline disabled:opacity-40"
+      >
+        Rerun
+      </button>
+    </span>
+  );
 
   return (
     <main className="mx-auto w-full max-w-[720px] px-6 pt-24 pb-32">
@@ -338,13 +456,6 @@ function WedgePage() {
           onChange={setTarget}
           placeholder="VP Eng, hiring manager, etc."
         />
-        <Field
-          label="Company GitHub org"
-          value={companyOrg}
-          onChange={setCompanyOrg}
-          placeholder="e.g. stripe, vercel, anthropics"
-          hint="Leave blank to skip — but this is where the best artifact ideas come from."
-        />
 
         <button
           type="button"
@@ -359,14 +470,52 @@ function WedgePage() {
       {/* Output */}
       {hasResults && (
         <div className="mt-24 space-y-20">
-          {/* 01 — Company Signal (only if org provided) */}
+          {/* Resolver progress line (only during step 0) */}
+          {resolveStage !== "idle" && resolveStage !== "done" && (
+            <div className="label-mono">{RESOLVE_LABEL[resolveStage]}</div>
+          )}
+
+          {/* 01 — Company Signal (only if we attempted resolution) */}
           {showCompanySection && (
             <Section header={`${companyNum} / Company Signal`}>
+              {/* Resolution status line */}
+              {resolveStage === "done" && (
+                <div className="mb-6 text-[13px] text-muted-fg">
+                  {resolved && resolved.confidence === "high" && (
+                    <span>
+                      Found {resolved.name ?? resolved.handle} on GitHub as{" "}
+                      <span className="mono text-foreground">@{resolved.handle}</span>.
+                    </span>
+                  )}
+                  {resolved && resolved.confidence === "medium" && (
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-2">
+                      Best guess:{" "}
+                      <span className="mono text-foreground">@{resolved.handle}</span>.
+                      If that's wrong, the company signal below will be off — tell me
+                      the right handle and I'll rerun. {correctionInput}
+                    </span>
+                  )}
+                  {!resolved && companyName && (
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-2">
+                      Couldn't find a GitHub org for "{companyName}". The artifact
+                      ideas below won't have company-specific signal — paste a handle
+                      to add it: {correctionInput}
+                    </span>
+                  )}
+                  {!resolved && !companyName && (
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-2">
+                      Couldn't identify the company from the job post. Add a GitHub
+                      org handle to get company signal: {correctionInput}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {companyState === "loading" ? (
                 <SkeletonRows />
               ) : companyState === "missing" ? (
                 <p className="mono text-[13px] text-muted-fg">
-                  No public GitHub org found for {orgLabel}.
+                  No public GitHub org found for @{resolved?.handle ?? handleOverride}.
                 </p>
               ) : company ? (
                 <CompanySignalView signal={company} rateLow={rateLow} />
