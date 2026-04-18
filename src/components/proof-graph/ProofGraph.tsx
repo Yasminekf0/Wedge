@@ -574,17 +574,102 @@ function ClaimDetailPanel({
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto px-6 py-5">
-              <div className="label-mono mb-3">Evidence</div>
-              <div className="space-y-2">
-                {claim.evidence.map((ev, i) => (
-                  <EvidenceRow key={i} ev={ev} />
-                ))}
+            <div className="flex-1 overflow-auto px-6 py-5 space-y-7">
+              {(claim.details?.timeline || claim.details?.status) && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
+                  {claim.details?.timeline && (
+                    <span className="mono uppercase tracking-wider text-tertiary-fg">
+                      {claim.details.timeline}
+                    </span>
+                  )}
+                  {claim.details?.status && (
+                    <span className="mono inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent-fg">
+                      <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                      {claim.details.status}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {claim.details?.story && (
+                <p className="text-[14px] leading-relaxed text-foreground/90">
+                  {claim.details.story}
+                </p>
+              )}
+
+              {claim.details?.metrics && claim.details.metrics.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {claim.details.metrics.map((m) => (
+                    <div
+                      key={m.label}
+                      className="rounded-md border border-border bg-foreground/[0.02] px-3 py-2.5"
+                    >
+                      <div className="text-[18px] font-medium tracking-tight text-foreground">
+                        {m.value}
+                      </div>
+                      <div className="mono mt-0.5 text-[10px] uppercase tracking-wider text-tertiary-fg">
+                        {m.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {claim.details?.highlights && claim.details.highlights.length > 0 && (
+                <div>
+                  <div className="label-mono mb-2">Highlights</div>
+                  <ul className="space-y-1.5">
+                    {claim.details.highlights.map((h, i) => (
+                      <li key={i} className="flex gap-2 text-[14px] leading-snug text-muted-fg">
+                        <span className="mono mt-1 text-tertiary-fg">—</span>
+                        <span>{h}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {claim.details?.stack && claim.details.stack.length > 0 && (
+                <div>
+                  <div className="label-mono mb-2">Stack</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {claim.details.stack.map((s) => (
+                      <span
+                        key={s}
+                        className="mono rounded-md border border-border px-2 py-1 text-[11px] text-foreground/80"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {claim.details?.quote && (
+                <blockquote className="border-l-2 border-accent/60 pl-4">
+                  <p className="text-[14px] italic leading-relaxed text-foreground/90">
+                    “{claim.details.quote.text}”
+                  </p>
+                  {claim.details.quote.attribution && (
+                    <footer className="mono mt-2 text-[11px] uppercase tracking-wider text-tertiary-fg">
+                      — {claim.details.quote.attribution}
+                    </footer>
+                  )}
+                </blockquote>
+              )}
+
+              <div>
+                <div className="label-mono mb-2">Evidence</div>
+                <div className="space-y-2">
+                  {claim.evidence.map((ev, i) => (
+                    <EvidenceRow key={i} ev={ev} />
+                  ))}
+                </div>
               </div>
 
               {claim.tags.length > 0 && (
-                <>
-                  <div className="label-mono mb-3 mt-8">Tags</div>
+                <div>
+                  <div className="label-mono mb-2">Tags</div>
                   <div className="flex flex-wrap gap-1.5">
                     {claim.tags.map((t) => (
                       <span
@@ -595,7 +680,7 @@ function ClaimDetailPanel({
                       </span>
                     ))}
                   </div>
-                </>
+                </div>
               )}
             </div>
           </motion.aside>
