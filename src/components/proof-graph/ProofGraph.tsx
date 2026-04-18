@@ -733,27 +733,33 @@ function PannableBoard({
     const h = vp.clientHeight;
     // Allow generous bottom slack so expanded cards never strand content.
     const effectiveH = boardHeight + 240;
-    const minX = Math.min(0, w - BOARD_W);
+    // If viewport is wider than the board, center it (allow positive tx).
+    // Otherwise keep a small breathing margin on the left edge.
+    const SIDE_MARGIN = 24;
+    const maxX = w > BOARD_W ? (w - BOARD_W) / 2 : SIDE_MARGIN;
+    const minX = w > BOARD_W ? (w - BOARD_W) / 2 : Math.min(0, w - BOARD_W - SIDE_MARGIN);
     const minY = Math.min(0, h - effectiveH);
     return {
-      x: Math.min(0, Math.max(minX, nx)),
+      x: Math.min(maxX, Math.max(minX, nx)),
       y: Math.min(0, Math.max(minY, ny)),
     };
   }, [boardHeight]);
 
   const recenter = React.useCallback(() => {
-    // Default view: top-left aligned (densest zone visible).
-    const { x, y } = clamp(0, 0);
+    const vp = viewportRef.current;
+    const w = vp?.clientWidth ?? 0;
+    // Center horizontally when viewport is wider than the board.
+    const initialX = w > BOARD_W ? (w - BOARD_W) / 2 : 0;
+    const { x, y } = clamp(initialX, 0);
     setTx(x);
     setTy(y);
   }, [clamp]);
 
   React.useEffect(() => {
     recenter();
-    // Re-clamp on viewport resize.
+    // Re-center on viewport resize so margins stay balanced.
     function onResize() {
-      setTx((v) => clamp(v, ty).x);
-      setTy((v) => clamp(tx, v).y);
+      recenter();
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
