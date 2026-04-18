@@ -402,6 +402,7 @@ interface CardProps {
   expanded: boolean;
   dim: boolean;
   highlight: boolean;
+  jobMatch: boolean;
   onToggle: (id: string) => void;
   index: number;
   filterLabelById: Map<string, string>;
@@ -412,6 +413,7 @@ function ClaimCard({
   expanded,
   dim,
   highlight,
+  jobMatch,
   onToggle,
   index,
   filterLabelById,
@@ -456,28 +458,32 @@ function ClaimCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{
         opacity: dim ? 0.25 : 1,
-        y: 0,
-        scale: dim ? 0.97 : 1,
+        y: jobMatch && !expanded ? -3 : 0,
+        scale: dim ? 0.97 : jobMatch && !expanded ? 1.03 : 1,
         filter: dim ? "saturate(0.3)" : "saturate(1)",
       }}
       transition={{
         opacity: { duration: 0.3, delay: index * 0.04, ease: "easeOut" },
-        y: { duration: 0.4, delay: index * 0.04, ease: "easeOut" },
-        scale: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+        y: { duration: 0.45, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] },
+        scale: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
         filter: { duration: 0.3, ease: "easeOut" },
-        layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+        layout: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
       }}
-      whileHover={dim ? undefined : { scale: expanded ? 1 : 1.02 }}
+      whileHover={dim ? undefined : { scale: expanded ? 1 : jobMatch ? 1.05 : 1.02 }}
       className={[
         "absolute text-left",
-        "rounded-lg border bg-background",
+        "rounded-lg border bg-background transition-shadow",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        highlight && !expanded
-          ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
-          : "border-border",
+        jobMatch && !expanded
+          ? "border-accent shadow-[0_0_0_1px_hsl(var(--accent)/0.4),0_12px_40px_-12px_hsl(var(--accent)/0.55)]"
+          : highlight && !expanded
+            ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
+            : "border-border",
         expanded
           ? "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
-          : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
+          : jobMatch
+            ? "z-20 hover:shadow-[0_16px_40px_-12px_hsl(var(--accent)/0.7)]"
+            : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
       ].join(" ")}
       style={{ left: x, top: y, width, cursor: "pointer" }}
       aria-expanded={expanded}
@@ -536,6 +542,7 @@ interface BoardProps {
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
+  jobMatchedIds: Set<string>;
 }
 
 function PannableBoard({
@@ -546,6 +553,7 @@ function PannableBoard({
   onToggle,
   activeFilters,
   filterLabelById,
+  jobMatchedIds,
 }: BoardProps) {
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const [tx, setTx] = React.useState(0);
@@ -704,6 +712,7 @@ function PannableBoard({
                 expanded={expandedId === claim.id}
                 dim={dim}
                 highlight={highlight}
+                jobMatch={jobMatchedIds.has(claim.id)}
                 onToggle={onToggle}
                 index={i}
                 filterLabelById={filterLabelById}
@@ -834,6 +843,13 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     [arrangedClaims],
   );
 
+  const jobMatchedIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (profile.jobLoaded) {
+      for (const c of profile.claims) if (isJobMatch(c)) ids.add(c.id);
+    }
+    return ids;
+  }, [profile.claims, profile.jobLoaded, isJobMatch]);
   // Filters: when a job is loaded, the rearrangement IS the signal — don't
   // also dim. Filter chips remain interactive for manual refinement.
   const [activeFilters, setActiveFilters] = React.useState<Set<string>>(
@@ -900,6 +916,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
+          jobMatchedIds={jobMatchedIds}
         />
       )}
     </div>
