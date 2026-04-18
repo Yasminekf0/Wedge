@@ -916,6 +916,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
+          jobMatchedIds={jobMatchedIds}
         />
       )}
     </div>
