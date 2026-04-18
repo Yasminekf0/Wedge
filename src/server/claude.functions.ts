@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-type Mode = "ideas" | "email";
+type Mode = "ideas" | "email" | "extract_company";
 
 export type ArtifactPattern =
   | "teardown"
@@ -43,6 +43,9 @@ interface CallInput {
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-5";
+const FAST_MODEL = "claude-haiku-4-5";
+
+const EXTRACT_SYSTEM = `Extract the company name from this job post. Return only the company name, nothing else. No quotes, no labels, no explanation. If you can't find a clear company name, return exactly: UNKNOWN`;
 
 const IDEAS_SYSTEM = `You are helping a developer generate artifact ideas for cold outreach to a company. An "artifact" is something small (2–8 hours of work) that a candidate can build or write to earn a response from a hiring manager or engineering leader. The artifact should reference something specific the company has published or built — not generic.
 
@@ -134,7 +137,12 @@ function extractJson(text: string): unknown {
 
 export const callClaude = createServerFn({ method: "POST" })
   .inputValidator((input: CallInput) => {
-    if (!input || (input.mode !== "ideas" && input.mode !== "email")) {
+    if (
+      !input ||
+      (input.mode !== "ideas" &&
+        input.mode !== "email" &&
+        input.mode !== "extract_company")
+    ) {
       throw new Error("invalid mode");
     }
     if (typeof input.jobMarkdown !== "string") {
@@ -146,6 +154,47 @@ export const callClaude = createServerFn({ method: "POST" })
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY missing on server");
+    }
+
+    // ---------- extract_company: tiny, fast, plain text response ----------
+    if (data.mode === "extract_company") {
+      const snippet = (data.jobMarkdown || "").slice(0, 3000);
+      const res = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: FAST_MODEL,
+          max_tokens: 50,
+          system: EXTRACT_SYSTEM,
+          messages: [{ role: "user", content: snippet }],
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Anthropic extract error", res.status, errText);
+        throw new Error(`Anthropic ${res.status}`);
+      }
+      const json = (await res.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      let text =
+        json.content
+          ?.filter((c) => c.type === "text")
+          .map((c) => c.text || "")
+          .join("")
+          .trim() || "";
+      // Strip surrounding quotes
+      text = text.replace(/^["'`]+|["'`]+$/g, "").trim();
+      const ok =
+        text.length > 0 && text.length <= 60 && text.toUpperCase() !== "UNKNOWN";
+      return {
+        mode: "extract_company" as const,
+        company: ok ? text : null,
+      };
     }
 
     const system = data.mode === "ideas" ? IDEAS_SYSTEM : EMAIL_SYSTEM;
