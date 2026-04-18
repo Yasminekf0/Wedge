@@ -138,9 +138,11 @@ export type SlopMode = "default" | "blunter" | "warmer";
 
 export function detectSlop(
   email: { subject: string; body: string },
-  opts: { mode?: SlopMode } = {},
+  opts: { mode?: SlopMode; companyName?: string | null; roleTitle?: string | null } = {},
 ): SlopViolation[] {
   const mode = opts.mode || "default";
+  const companyName = (opts.companyName || "").trim();
+  const roleTitle = (opts.roleTitle || "").trim();
   const violations: SlopViolation[] = [];
   const subject = email.subject || "";
   const body = email.body || "";
