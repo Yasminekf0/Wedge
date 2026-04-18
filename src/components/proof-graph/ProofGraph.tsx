@@ -170,6 +170,7 @@ interface LayoutResult {
 function autoLayout(rawClaims: Claim[]): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
+    achievements: [],
     work: [],
     education: [],
   };
