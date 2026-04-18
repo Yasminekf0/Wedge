@@ -574,7 +574,7 @@ function ClaimDetailPanel({
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto px-6 py-5 space-y-7">
+            <div className="no-scrollbar flex-1 overflow-auto px-6 py-5 space-y-7">
               {(claim.details?.timeline || claim.details?.status) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
                   {claim.details?.timeline && (
