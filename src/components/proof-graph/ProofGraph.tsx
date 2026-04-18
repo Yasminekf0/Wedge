@@ -106,8 +106,8 @@ const SECTION_TINT: Record<ClaimSection, string> = {
 };
 
 // Glyph rendered at the top-left of every claim card.
-// Uses the primary evidence to choose icon + tint (language color when present),
-// falling back to the section tint. This is the "logo" that makes nodes pop.
+// Prefers a real logo from the primary evidence; falls back to a typed icon
+// tinted by the language color (or section tint).
 function ClaimGlyph({ claim }: { claim: Claim }) {
   const primary = claim.evidence[0];
   const Icon = primary ? EVIDENCE_ICON[primary.type] ?? Box : Box;
@@ -115,18 +115,37 @@ function ClaimGlyph({ claim }: { claim: Claim }) {
     ? LANGUAGE_COLORS[primary.language]
     : undefined;
   const tint = langColor || SECTION_TINT[claim.section];
+  const logo = primary?.logo;
+  const [logoFailed, setLogoFailed] = React.useState(false);
+  const showLogo = !!logo && !logoFailed;
 
   return (
     <div
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background"
       style={{
         borderColor: `color-mix(in oklab, ${tint} 55%, transparent)`,
-        background: `color-mix(in oklab, ${tint} 14%, transparent)`,
         boxShadow: `0 0 0 1px color-mix(in oklab, ${tint} 18%, transparent), 0 6px 18px -10px ${tint}`,
       }}
       aria-hidden
     >
-      <Icon className="h-4 w-4" />
+      {showLogo ? (
+        <img
+          src={logo}
+          alt=""
+          loading="lazy"
+          onError={() => setLogoFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{
+            background: `color-mix(in oklab, ${tint} 14%, transparent)`,
+          }}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      )}
       {/* Language pip — only when we have a language signal */}
       {langColor && (
         <span
