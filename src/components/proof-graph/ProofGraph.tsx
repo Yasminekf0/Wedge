@@ -12,22 +12,40 @@ import type {
 // Constants — board layout
 // ---------------------------------------------------------------------------
 
-const BOARD_W = 1400;
-const BOARD_H = 1240;
+// Compact, structured grid. Three sections stacked vertically, each laid out
+// on a shared 4-column track. Cards span 1 or 2 columns based on size.
+const COLS = 4;
+const COL_W = 260;
+const COL_GAP = 20;
+const ROW_GAP = 16;
+const PAD_X = 120; // leaves room for section labels on the left
+const PAD_TOP = 24;
+const SECTION_GAP = 56;
+const SECTION_HEADER_H = 36;
 
-const SECTION_ZONES: Record<
-  ClaimSection,
-  { label: string; labelX: number; labelY: number }
-> = {
-  projects: { label: "Projects", labelX: 40, labelY: 28 },
-  work: { label: "Work", labelX: 40, labelY: 600 },
-  education: { label: "Education", labelX: 40, labelY: 900 },
+const BOARD_W = PAD_X + COLS * COL_W + (COLS - 1) * COL_GAP + 60;
+
+const SIZE_TO_SPAN: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 1,
+  md: 1,
+  lg: 2,
 };
 
-const SIZE_TO_WIDTH: Record<NonNullable<Claim["size"]>, number> = {
-  sm: 220,
-  md: 290,
-  lg: 360,
+const SIZE_TO_HEIGHT: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 110,
+  md: 130,
+  lg: 130,
+};
+
+function spanWidth(span: number): number {
+  return span * COL_W + (span - 1) * COL_GAP;
+}
+
+const SECTION_ORDER: ClaimSection[] = ["projects", "work", "education"];
+const SECTION_LABEL: Record<ClaimSection, string> = {
+  projects: "Projects",
+  work: "Work",
+  education: "Education",
 };
 
 // ---------------------------------------------------------------------------
@@ -60,36 +78,57 @@ function LanguageDot({ lang }: { lang?: string }) {
   );
 }
 
-// Auto-layout for claims without explicit positions. Loose, deterministic.
-function autoLayout(claims: Claim[]): Claim[] {
+// Pack claims into a tidy grid per section. Each section gets a header row,
+// then claims flow left-to-right across COLS columns, wrapping as needed.
+interface LayoutResult {
+  claims: Claim[];
+  sections: Array<{ section: ClaimSection; y: number }>;
+  height: number;
+}
+
+function autoLayout(rawClaims: Claim[]): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
     work: [],
     education: [],
   };
-  for (const c of claims) buckets[c.section].push(c);
+  for (const c of rawClaims) buckets[c.section].push(c);
 
-  const zoneTops: Record<ClaimSection, number> = {
-    projects: 70,
-    work: 640,
-    education: 940,
+  const positioned = new Map<string, Claim>();
+  const sections: Array<{ section: ClaimSection; y: number }> = [];
+  let cursorY = PAD_TOP;
+
+  for (const section of SECTION_ORDER) {
+    const items = buckets[section];
+    if (items.length === 0) continue;
+
+    sections.push({ section, y: cursorY });
+    let rowY = cursorY + SECTION_HEADER_H;
+    let col = 0;
+    let rowMaxH = 0;
+
+    for (const c of items) {
+      const span = SIZE_TO_SPAN[c.size || "md"];
+      if (col + span > COLS) {
+        rowY += rowMaxH + ROW_GAP;
+        col = 0;
+        rowMaxH = 0;
+      }
+      const x = PAD_X + col * (COL_W + COL_GAP);
+      const h = SIZE_TO_HEIGHT[c.size || "md"];
+      positioned.set(c.id, { ...c, position: { x, y: rowY } });
+      col += span;
+      rowMaxH = Math.max(rowMaxH, h);
+    }
+
+    cursorY = rowY + rowMaxH + SECTION_GAP;
+  }
+
+  return {
+    claims: rawClaims.map((c) => positioned.get(c.id) || c),
+    sections,
+    height: Math.max(cursorY, 600),
   };
-
-  return claims.map((c) => {
-    if (c.position) return c;
-    const idx = buckets[c.section].indexOf(c);
-    const col = idx % 3;
-    const row = Math.floor(idx / 3);
-    const jitterX = ((idx * 53) % 40) - 20;
-    const jitterY = ((idx * 31) % 30) - 15;
-    return {
-      ...c,
-      position: {
-        x: 60 + col * 420 + jitterX,
-        y: zoneTops[c.section] + row * 220 + jitterY,
-      },
-    };
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -203,21 +242,25 @@ function FilterBar({
 // Section labels (floating on the board)
 // ---------------------------------------------------------------------------
 
-function SectionLabels() {
+function SectionLabels({
+  sections,
+}: {
+  sections: Array<{ section: ClaimSection; y: number }>;
+}) {
   return (
     <>
-      {(Object.keys(SECTION_ZONES) as ClaimSection[]).map((s) => {
-        const z = SECTION_ZONES[s];
-        return (
-          <div
-            key={s}
-            className="mono pointer-events-none absolute select-none text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg"
-            style={{ left: z.labelX, top: z.labelY }}
-          >
-            {z.label}
+      {sections.map(({ section, y }) => (
+        <div
+          key={section}
+          className="pointer-events-none absolute select-none"
+          style={{ left: 32, top: y, width: PAD_X - 48 }}
+        >
+          <div className="mono text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg">
+            {SECTION_LABEL[section]}
           </div>
-        );
-      })}
+          <div className="mt-2 h-px w-8 bg-border" />
+        </div>
+      ))}
     </>
   );
 }
@@ -290,7 +333,7 @@ function ClaimCard({
   index,
   filterLabelById,
 }: CardProps) {
-  const width = SIZE_TO_WIDTH[claim.size || "md"];
+  const width = spanWidth(SIZE_TO_SPAN[claim.size || "md"]);
   const x = claim.position?.x ?? 0;
   const y = claim.position?.y ?? 0;
 
@@ -396,6 +439,8 @@ function ClaimCard({
 
 interface BoardProps {
   claims: Claim[];
+  sections: Array<{ section: ClaimSection; y: number }>;
+  boardHeight: number;
   expandedId: string | null;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
@@ -404,6 +449,8 @@ interface BoardProps {
 
 function PannableBoard({
   claims,
+  sections,
+  boardHeight,
   expandedId,
   onToggle,
   activeFilters,
@@ -426,7 +473,7 @@ function PannableBoard({
     const w = vp.clientWidth;
     const h = vp.clientHeight;
     const minX = Math.min(0, w - BOARD_W);
-    const minY = Math.min(0, h - BOARD_H);
+    const minY = Math.min(0, h - boardHeight);
     return {
       x: Math.min(0, Math.max(minX, nx)),
       y: Math.min(0, Math.max(minY, ny)),
@@ -543,7 +590,7 @@ function PannableBoard({
         className="relative origin-top-left"
         style={{
           width: BOARD_W,
-          height: BOARD_H,
+          height: boardHeight,
           transform: `translate3d(${tx}px, ${ty}px, 0)`,
           transition: isDragging
             ? "none"
@@ -553,7 +600,7 @@ function PannableBoard({
           backgroundSize: "24px 24px",
         }}
       >
-        <SectionLabels />
+        <SectionLabels sections={sections} />
 
         {claims.map((claim, i) => {
           const isMatch = matches(claim);
@@ -661,7 +708,7 @@ function SparseList({
 // ---------------------------------------------------------------------------
 
 export function ProofGraph({ profile }: { profile: ProofProfile }) {
-  const claims = React.useMemo(
+  const { claims, sections, height: boardHeight } = React.useMemo(
     () => autoLayout(profile.claims),
     [profile.claims],
   );
@@ -733,6 +780,8 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
       ) : (
         <PannableBoard
           claims={claims}
+          sections={sections}
+          boardHeight={boardHeight}
           expandedId={expandedId}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
