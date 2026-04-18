@@ -817,18 +817,45 @@ function WedgePage() {
             </Section>
           )}
 
-          {/* Proof Graph — embedded, with simulated job match on. Expandable. */}
+          {/* Proof Graph — small preview by default, expandable to fullscreen. */}
           <Section header={`${proofNum} / Proof Graph`}>
-            <button
-              type="button"
-              onClick={() => setProofExpanded((v) => !v)}
-              aria-expanded={proofExpanded}
-              className="mono text-[12px] uppercase tracking-wider text-accent underline-offset-4 hover:underline"
-            >
-              {proofExpanded ? "Collapse" : "Expand"} proof graph
-            </button>
+            <div className="relative">
+              {/* Small, non-interactive preview */}
+              <div
+                className="pointer-events-none relative h-[280px] overflow-hidden rounded-md border border-border bg-background"
+                aria-hidden="true"
+              >
+                <div
+                  className="origin-top-left"
+                  style={{ transform: "scale(0.32)", width: "312.5%" }}
+                >
+                  <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
+                </div>
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background to-transparent" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setProofExpanded(true)}
+                className="mono absolute bottom-3 right-3 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:bg-foreground/5"
+              >
+                Expand
+              </button>
+            </div>
+
             {proofExpanded && (
-              <div className="-mx-6 mt-6">
+              <div className="fixed inset-0 z-50 overflow-auto bg-background">
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur">
+                  <span className="mono text-[12px] uppercase tracking-wider text-muted-fg">
+                    {proofNum} / Proof Graph
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setProofExpanded(false)}
+                    className="mono rounded-md border border-border bg-background px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground transition-colors hover:bg-foreground/5"
+                  >
+                    Collapse
+                  </button>
+                </div>
                 <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
               </div>
             )}
