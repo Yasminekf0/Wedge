@@ -1,10 +1,22 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Github, Linkedin, MapPin, RotateCcw, ExternalLink } from "lucide-react";
+import {
+  Github,
+  Linkedin,
+  MapPin,
+  RotateCcw,
+  ExternalLink,
+  Building2,
+  GraduationCap,
+  Globe,
+  Link2,
+  Box,
+} from "lucide-react";
 import type {
   Claim,
   ClaimSection,
   Evidence,
+  EvidenceType,
   ProofProfile,
 } from "./types";
 
