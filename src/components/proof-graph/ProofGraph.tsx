@@ -473,7 +473,7 @@ function PannableBoard({
     const w = vp.clientWidth;
     const h = vp.clientHeight;
     const minX = Math.min(0, w - BOARD_W);
-    const minY = Math.min(0, h - BOARD_H);
+    const minY = Math.min(0, h - boardHeight);
     return {
       x: Math.min(0, Math.max(minX, nx)),
       y: Math.min(0, Math.max(minY, ny)),
