@@ -164,10 +164,6 @@ function WedgePage() {
   const [hn, setHn] = React.useState<HNSignal | null>(null);
   const [rateLow, setRateLow] = React.useState(false);
 
-  const [proofState, setProofState] = React.useState<
-    "idle" | "loading" | "missing" | "skipped" | "ready"
-  >("idle");
-  const [proof, setProof] = React.useState<CandidateProof | null>(null);
 
   const [jobMd, setJobMd] = React.useState<string>("");
   const [jobFailed, setJobFailed] = React.useState(false);
