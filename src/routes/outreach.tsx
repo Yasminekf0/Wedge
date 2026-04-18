@@ -3,7 +3,8 @@ import { useServerFn } from "@tanstack/react-start";
 import * as React from "react";
 import { CompanySignalView } from "@/components/wedge/CompanySignalView";
 import { IdeaBlock } from "@/components/wedge/IdeaBlock";
-import { ProofGraphView } from "@/components/wedge/ProofGraphView";
+import { ProofGraph } from "@/components/proof-graph/ProofGraph";
+import { exampleProfile } from "@/components/proof-graph/exampleProfile";
 import {
   ErrorLine,
   Field,
@@ -815,17 +816,11 @@ function WedgePage() {
             </Section>
           )}
 
-          {/* Proof Graph */}
+          {/* Proof Graph — embedded, with simulated job match on */}
           <Section header={`${proofNum} / Proof Graph`}>
-            {proofState === "missing" ? (
-              <p className="mono text-[13px] text-muted-fg">
-                No GitHub profile found for {SASHA_GH}.
-              </p>
-            ) : proofState === "loading" || !proof ? (
-              <SkeletonRows />
-            ) : (
-              <ProofGraphView graph={proof} />
-            )}
+            <div className="-mx-6">
+              <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
+            </div>
           </Section>
 
           {/* Artifact Ideas */}
