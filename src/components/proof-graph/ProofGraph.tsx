@@ -1,0 +1,744 @@
+import * as React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Github, Linkedin, MapPin, RotateCcw, ExternalLink } from "lucide-react";
+import type {
+  Claim,
+  ClaimSection,
+  Evidence,
+  ProofProfile,
+} from "./types";
+
+// ---------------------------------------------------------------------------
+// Constants — board layout
+// ---------------------------------------------------------------------------
+
+const BOARD_W = 1400;
+const BOARD_H = 1240;
+
+const SECTION_ZONES: Record<
+  ClaimSection,
+  { label: string; labelX: number; labelY: number }
+> = {
+  projects: { label: "Projects", labelX: 40, labelY: 28 },
+  work: { label: "Work", labelX: 40, labelY: 600 },
+  education: { label: "Education", labelX: 40, labelY: 900 },
+};
+
+const SIZE_TO_WIDTH: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 220,
+  md: 290,
+  lg: 360,
+};
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
+const LANGUAGE_COLORS: Record<string, string> = {
+  Rust: "#dea584",
+  TypeScript: "#3178c6",
+  JavaScript: "#f1e05a",
+  Go: "#00add8",
+  Python: "#3572a5",
+  C: "#aaaaaa",
+  "C++": "#f34b7d",
+  Ruby: "#701516",
+  Java: "#b07219",
+  Swift: "#f05138",
+  Kotlin: "#a97bff",
+};
+
+function LanguageDot({ lang }: { lang?: string }) {
+  if (!lang) return null;
+  const color = LANGUAGE_COLORS[lang] || "#888";
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-2 w-2 rounded-full"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+// Auto-layout for claims without explicit positions. Loose, deterministic.
+function autoLayout(claims: Claim[]): Claim[] {
+  const buckets: Record<ClaimSection, Claim[]> = {
+    projects: [],
+    work: [],
+    education: [],
+  };
+  for (const c of claims) buckets[c.section].push(c);
+
+  const zoneTops: Record<ClaimSection, number> = {
+    projects: 70,
+    work: 640,
+    education: 940,
+  };
+
+  return claims.map((c) => {
+    if (c.position) return c;
+    const idx = buckets[c.section].indexOf(c);
+    const col = idx % 3;
+    const row = Math.floor(idx / 3);
+    const jitterX = ((idx * 53) % 40) - 20;
+    const jitterY = ((idx * 31) % 30) - 15;
+    return {
+      ...c,
+      position: {
+        x: 60 + col * 420 + jitterX,
+        y: zoneTops[c.section] + row * 220 + jitterY,
+      },
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
+function ProofHeaderBar({ profile }: { profile: ProofProfile }) {
+  const { header } = profile;
+  return (
+    <div className="border-b border-border bg-background">
+      <div className="mx-auto flex w-full max-w-[1400px] items-center gap-4 px-6 py-4">
+        <img
+          src={header.avatar}
+          alt=""
+          className="h-12 w-12 rounded-md border border-border object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="text-[18px] font-medium tracking-tight text-foreground">
+              {header.name}
+            </h1>
+            <span className="mono inline-flex items-center gap-1 text-[12px] text-tertiary-fg">
+              <MapPin className="h-3 w-3" aria-hidden />
+              {header.location}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[14px] text-muted-fg">{header.bio}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {header.linkedin && (
+            <a
+              href={header.linkedin}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="LinkedIn"
+              className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Linkedin className="h-4 w-4" />
+            </a>
+          )}
+          {header.github && (
+            <a
+              href={header.github}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+              className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar
+// ---------------------------------------------------------------------------
+
+function FilterBar({
+  profile,
+  active,
+  onToggle,
+  onClear,
+}: {
+  profile: ProofProfile;
+  active: Set<string>;
+  onToggle: (id: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="border-b border-border bg-background">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-2 px-6 py-3">
+        <span className="label-mono mr-1">Filter</span>
+        {profile.filters.map((f) => {
+          const isActive = active.has(f.id);
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onToggle(f.id)}
+              aria-pressed={isActive}
+              className={[
+                "mono rounded-full border px-3 py-1 text-[11px] uppercase tracking-wider transition-colors",
+                isActive
+                  ? "border-accent bg-accent text-accent-fg"
+                  : "border-border text-muted-fg hover:border-muted-fg hover:text-foreground",
+              ].join(" ")}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+        {active.size > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="mono ml-2 text-[11px] uppercase tracking-wider text-tertiary-fg underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section labels (floating on the board)
+// ---------------------------------------------------------------------------
+
+function SectionLabels() {
+  return (
+    <>
+      {(Object.keys(SECTION_ZONES) as ClaimSection[]).map((s) => {
+        const z = SECTION_ZONES[s];
+        return (
+          <div
+            key={s}
+            className="mono pointer-events-none absolute select-none text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg"
+            style={{ left: z.labelX, top: z.labelY }}
+          >
+            {z.label}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Evidence row
+// ---------------------------------------------------------------------------
+
+function EvidenceRow({ ev }: { ev: Evidence }) {
+  const inner = (
+    <div className="group/ev flex items-start gap-3 rounded-md border border-border/60 px-3 py-2.5 transition-colors hover:border-muted-fg">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <LanguageDot lang={ev.language} />
+          <span className="text-[14px] font-medium text-foreground">
+            {ev.title}
+          </span>
+          {ev.meta && (
+            <span className="mono text-[11px] text-tertiary-fg">{ev.meta}</span>
+          )}
+        </div>
+        {ev.description && (
+          <p className="mt-1 text-[13px] leading-snug text-muted-fg">
+            {ev.description}
+          </p>
+        )}
+      </div>
+      {ev.url && (
+        <ExternalLink
+          className="mt-1 h-3.5 w-3.5 shrink-0 text-tertiary-fg transition-colors group-hover/ev:text-foreground"
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+  if (!ev.url) return inner;
+  return (
+    <a
+      href={ev.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="block"
+    >
+      {inner}
+    </a>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claim card
+// ---------------------------------------------------------------------------
+
+interface CardProps {
+  claim: Claim;
+  expanded: boolean;
+  dim: boolean;
+  highlight: boolean;
+  onToggle: (id: string) => void;
+  index: number;
+  filterLabelById: Map<string, string>;
+}
+
+function ClaimCard({
+  claim,
+  expanded,
+  dim,
+  highlight,
+  onToggle,
+  index,
+  filterLabelById,
+}: CardProps) {
+  const width = SIZE_TO_WIDTH[claim.size || "md"];
+  const x = claim.position?.x ?? 0;
+  const y = claim.position?.y ?? 0;
+
+  const tagEls: React.ReactNode[] = [];
+  claim.tags.slice(0, 5).forEach((t, i) => {
+    if (i > 0) {
+      tagEls.push(
+        <span key={`sep-${i}`} className="mono text-[10px] text-tertiary-fg/60">
+          ·
+        </span>,
+      );
+    }
+    tagEls.push(
+      <span
+        key={t}
+        className="mono text-[10px] uppercase tracking-wider text-tertiary-fg"
+      >
+        {filterLabelById.get(t) || t}
+      </span>,
+    );
+  });
+
+  return (
+    <motion.button
+      type="button"
+      layout
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(claim.id);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle(claim.id);
+        }
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{
+        opacity: dim ? 0.25 : 1,
+        y: 0,
+        scale: dim ? 0.97 : 1,
+        filter: dim ? "saturate(0.3)" : "saturate(1)",
+      }}
+      transition={{
+        opacity: { duration: 0.3, delay: index * 0.04, ease: "easeOut" },
+        y: { duration: 0.4, delay: index * 0.04, ease: "easeOut" },
+        scale: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+        filter: { duration: 0.3, ease: "easeOut" },
+        layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+      }}
+      whileHover={dim ? undefined : { scale: expanded ? 1 : 1.02 }}
+      className={[
+        "absolute text-left",
+        "rounded-lg border bg-background",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        highlight && !expanded
+          ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
+          : "border-border",
+        expanded
+          ? "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
+          : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
+      ].join(" ")}
+      style={{ left: x, top: y, width, cursor: "pointer" }}
+      aria-expanded={expanded}
+    >
+      <div className="px-4 pt-4 pb-3">
+        <p className="text-[15px] font-medium leading-snug text-foreground">
+          {claim.text}
+        </p>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="evidence"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2 px-4 pb-4">
+              {claim.evidence.map((ev, i) => (
+                <EvidenceRow key={i} ev={ev} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {tagEls.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-border/50 px-4 py-2">
+          {tagEls}
+        </div>
+      )}
+    </motion.button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pannable board
+// ---------------------------------------------------------------------------
+
+interface BoardProps {
+  claims: Claim[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  activeFilters: Set<string>;
+  filterLabelById: Map<string, string>;
+}
+
+function PannableBoard({
+  claims,
+  expandedId,
+  onToggle,
+  activeFilters,
+  filterLabelById,
+}: BoardProps) {
+  const viewportRef = React.useRef<HTMLDivElement>(null);
+  const [tx, setTx] = React.useState(0);
+  const [ty, setTy] = React.useState(0);
+  const [isDragging, setDragging] = React.useState(false);
+  const dragState = React.useRef<{
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+  } | null>(null);
+
+  const clamp = React.useCallback((nx: number, ny: number) => {
+    const vp = viewportRef.current;
+    if (!vp) return { x: nx, y: ny };
+    const w = vp.clientWidth;
+    const h = vp.clientHeight;
+    const minX = Math.min(0, w - BOARD_W);
+    const minY = Math.min(0, h - BOARD_H);
+    return {
+      x: Math.min(0, Math.max(minX, nx)),
+      y: Math.min(0, Math.max(minY, ny)),
+    };
+  }, []);
+
+  const recenter = React.useCallback(() => {
+    // Default view: top-left aligned (densest zone visible).
+    const { x, y } = clamp(0, 0);
+    setTx(x);
+    setTy(y);
+  }, [clamp]);
+
+  React.useEffect(() => {
+    recenter();
+    // Re-clamp on viewport resize.
+    function onResize() {
+      setTx((v) => clamp(v, ty).x);
+      setTy((v) => clamp(tx, v).y);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pointer-based drag panning on background.
+  React.useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const s = dragState.current;
+      if (!s) return;
+      const dx = e.clientX - s.startX;
+      const dy = e.clientY - s.startY;
+      const { x, y } = clamp(s.baseX + dx, s.baseY + dy);
+      setTx(x);
+      setTy(y);
+    }
+    function onUp() {
+      setDragging(false);
+      dragState.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+    function onDown(e: PointerEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-card]")) return;
+      dragState.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX: tx,
+        baseY: ty,
+      };
+      setDragging(true);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    }
+    const vp = viewportRef.current;
+    vp?.addEventListener("pointerdown", onDown);
+    return () => {
+      vp?.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [tx, ty, clamp]);
+
+  // Wheel / trackpad pan.
+  React.useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const { x, y } = clamp(tx - e.deltaX, ty - e.deltaY);
+      setTx(x);
+      setTy(y);
+    }
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, [tx, ty, clamp]);
+
+  // Arrow key panning.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const step = 60;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = step;
+      else if (e.key === "ArrowRight") dx = -step;
+      else if (e.key === "ArrowUp") dy = step;
+      else if (e.key === "ArrowDown") dy = -step;
+      else return;
+      e.preventDefault();
+      const { x, y } = clamp(tx + dx, ty + dy);
+      setTx(x);
+      setTy(y);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tx, ty, clamp]);
+
+  const visibleHighlight = activeFilters.size > 0;
+  const matches = (c: Claim) =>
+    !visibleHighlight || c.tags.some((t) => activeFilters.has(t));
+  const allDimmed =
+    visibleHighlight && claims.every((c) => !matches(c));
+
+  return (
+    <div
+      ref={viewportRef}
+      className="relative flex-1 select-none overflow-hidden"
+      style={{ cursor: isDragging ? "grabbing" : "grab", touchAction: "none" }}
+    >
+      <div
+        className="relative origin-top-left"
+        style={{
+          width: BOARD_W,
+          height: BOARD_H,
+          transform: `translate3d(${tx}px, ${ty}px, 0)`,
+          transition: isDragging
+            ? "none"
+            : "transform 250ms cubic-bezier(0.22, 1, 0.36, 1)",
+          backgroundImage:
+            "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      >
+        <SectionLabels />
+
+        {claims.map((claim, i) => {
+          const isMatch = matches(claim);
+          const dim = visibleHighlight && !isMatch;
+          const highlight = visibleHighlight && isMatch;
+          return (
+            <div key={claim.id} data-card>
+              <ClaimCard
+                claim={claim}
+                expanded={expandedId === claim.id}
+                dim={dim}
+                highlight={highlight}
+                onToggle={onToggle}
+                index={i}
+                filterLabelById={filterLabelById}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Edge fades */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12 bg-gradient-to-r from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-12 bg-gradient-to-l from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-10 bg-gradient-to-b from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-10 bg-gradient-to-t from-background to-transparent" />
+
+      {allDimmed && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 mx-auto w-fit -translate-y-1/2 rounded-md border border-border bg-background/90 px-4 py-2 backdrop-blur">
+          <p className="mono text-[12px] uppercase tracking-wider text-muted-fg">
+            No claims match these filters.
+          </p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={recenter}
+        aria-label="Recenter board"
+        className="mono absolute bottom-4 right-4 z-40 inline-flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:border-muted-fg hover:text-foreground"
+      >
+        <RotateCcw className="h-3 w-3" />
+        Recenter
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sparse fallback (vertical list)
+// ---------------------------------------------------------------------------
+
+function SparseList({
+  claims,
+  expandedId,
+  onToggle,
+  activeFilters,
+  filterLabelById,
+}: {
+  claims: Claim[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  activeFilters: Set<string>;
+  filterLabelById: Map<string, string>;
+}) {
+  const visibleHighlight = activeFilters.size > 0;
+  return (
+    <div className="mx-auto w-full max-w-[640px] flex-1 space-y-4 overflow-auto px-6 py-10">
+      {claims.map((c) => {
+        const isMatch =
+          !visibleHighlight || c.tags.some((t) => activeFilters.has(t));
+        const dim = visibleHighlight && !isMatch;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onToggle(c.id)}
+            className={[
+              "block w-full rounded-lg border border-border bg-background p-4 text-left transition-all",
+              dim ? "opacity-25 saturate-50" : "opacity-100",
+            ].join(" ")}
+          >
+            <p className="text-[15px] font-medium text-foreground">{c.text}</p>
+            {expandedId === c.id && (
+              <div className="mt-3 space-y-2">
+                {c.evidence.map((ev, i) => (
+                  <EvidenceRow key={i} ev={ev} />
+                ))}
+              </div>
+            )}
+            {c.tags.length > 0 && (
+              <p className="mono mt-3 text-[10px] uppercase tracking-wider text-tertiary-fg">
+                {c.tags.map((t) => filterLabelById.get(t) || t).join(" · ")}
+              </p>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+export function ProofGraph({ profile }: { profile: ProofProfile }) {
+  const claims = React.useMemo(
+    () => autoLayout(profile.claims),
+    [profile.claims],
+  );
+  const filterLabelById = React.useMemo(
+    () => new Map(profile.filters.map((f) => [f.id, f.label])),
+    [profile.filters],
+  );
+
+  const initialActive = React.useMemo(() => {
+    if (profile.jobLoaded && profile.jobActiveFilterIds?.length) {
+      return new Set(profile.jobActiveFilterIds);
+    }
+    return new Set<string>();
+  }, [profile.jobLoaded, profile.jobActiveFilterIds]);
+
+  const [activeFilters, setActiveFilters] =
+    React.useState<Set<string>>(initialActive);
+
+  React.useEffect(() => {
+    setActiveFilters(initialActive);
+  }, [initialActive]);
+
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
+  const toggleFilter = React.useCallback((id: string) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearFilters = React.useCallback(() => {
+    setActiveFilters(new Set());
+  }, []);
+
+  const toggleClaim = React.useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setExpandedId(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const sparse = claims.length < 5;
+
+  return (
+    <div className="flex h-screen flex-col">
+      <ProofHeaderBar profile={profile} />
+      <FilterBar
+        profile={profile}
+        active={activeFilters}
+        onToggle={toggleFilter}
+        onClear={clearFilters}
+      />
+      {sparse ? (
+        <SparseList
+          claims={claims}
+          expandedId={expandedId}
+          onToggle={toggleClaim}
+          activeFilters={activeFilters}
+          filterLabelById={filterLabelById}
+        />
+      ) : (
+        <PannableBoard
+          claims={claims}
+          expandedId={expandedId}
+          onToggle={toggleClaim}
+          activeFilters={activeFilters}
+          filterLabelById={filterLabelById}
+        />
+      )}
+    </div>
+  );
+}
