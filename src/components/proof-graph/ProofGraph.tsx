@@ -841,11 +841,6 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     return [...matched, ...rest];
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
 
-  const { claims, sections, height: boardHeight } = React.useMemo(
-    () => autoLayout(arrangedClaims),
-    [arrangedClaims],
-  );
-
   const jobMatchedIds = React.useMemo(() => {
     const ids = new Set<string>();
     if (profile.jobLoaded) {
@@ -853,6 +848,22 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     }
     return ids;
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
+
+  // Expansion state. When a job loads, all matched claims auto-expand; the
+  // user can still manually open/close any card on top of that.
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(
+    () => new Set(jobMatchedIds),
+  );
+
+  React.useEffect(() => {
+    setExpandedIds(new Set(jobMatchedIds));
+  }, [jobMatchedIds]);
+
+  const { claims, sections, height: boardHeight } = React.useMemo(
+    () => autoLayout(arrangedClaims, expandedIds),
+    [arrangedClaims, expandedIds],
+  );
+
   // Filters: when a job is loaded, the rearrangement IS the signal — don't
   // also dim. Filter chips remain interactive for manual refinement.
   const [activeFilters, setActiveFilters] = React.useState<Set<string>>(
@@ -863,8 +874,6 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     // Reset manual filters whenever job context flips.
     setActiveFilters(new Set());
   }, [profile.jobLoaded]);
-
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   const toggleFilter = React.useCallback((id: string) => {
     setActiveFilters((prev) => {
@@ -880,12 +889,17 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
   }, []);
 
   const toggleClaim = React.useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setExpandedId(null);
+      if (e.key === "Escape") setExpandedIds(new Set());
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
