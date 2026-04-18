@@ -545,7 +545,7 @@ interface BoardProps {
   claims: Claim[];
   sections: Array<{ section: ClaimSection; y: number }>;
   boardHeight: number;
-  expandedId: string | null;
+  expandedIds: Set<string>;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
@@ -556,7 +556,7 @@ function PannableBoard({
   claims,
   sections,
   boardHeight,
-  expandedId,
+  expandedIds,
   onToggle,
   activeFilters,
   filterLabelById,
@@ -716,7 +716,7 @@ function PannableBoard({
             <div key={claim.id} data-card>
               <ClaimCard
                 claim={claim}
-                expanded={expandedId === claim.id}
+                expanded={expandedIds.has(claim.id)}
                 dim={dim}
                 highlight={highlight}
                 jobMatch={jobMatchedIds.has(claim.id)}
@@ -753,13 +753,13 @@ function PannableBoard({
 
 function SparseList({
   claims,
-  expandedId,
+  expandedIds,
   onToggle,
   activeFilters,
   filterLabelById,
 }: {
   claims: Claim[];
-  expandedId: string | null;
+  expandedIds: Set<string>;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
@@ -782,7 +782,7 @@ function SparseList({
             ].join(" ")}
           >
             <p className="text-[15px] font-medium text-foreground">{c.text}</p>
-            {expandedId === c.id && (
+            {expandedIds.has(c.id) && (
               <div className="mt-3 space-y-2">
                 {c.evidence.map((ev, i) => (
                   <EvidenceRow key={i} ev={ev} />
@@ -919,7 +919,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
       {sparse ? (
         <SparseList
           claims={claims}
-          expandedId={expandedId}
+          expandedIds={expandedIds}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
@@ -929,7 +929,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
           claims={claims}
           sections={sections}
           boardHeight={boardHeight}
-          expandedId={expandedId}
+          expandedIds={expandedIds}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
