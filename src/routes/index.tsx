@@ -202,7 +202,7 @@ function WedgePage() {
     setSlopHint(null);
     setEmailStage("drafting");
     const voiceInstruction = instructionForMode(mode);
-    const candidateName = p?.user?.name || p?.user?.login || "";
+    const candidateName = p?.user?.login || "";
     const baseData = {
       mode: "email" as const,
       jobMarkdown,
