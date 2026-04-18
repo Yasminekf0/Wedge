@@ -44,9 +44,9 @@ const SIZE_TO_SPAN: Record<NonNullable<Claim["size"]>, number> = {
 };
 
 const SIZE_TO_HEIGHT: Record<NonNullable<Claim["size"]>, number> = {
-  sm: 110,
-  md: 130,
-  lg: 130,
+  sm: 124,
+  md: 144,
+  lg: 144,
 };
 
 function spanWidth(span: number): number {
