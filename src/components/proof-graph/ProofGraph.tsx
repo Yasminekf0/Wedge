@@ -757,10 +757,9 @@ function PannableBoard({
 
   React.useEffect(() => {
     recenter();
-    // Re-clamp on viewport resize.
+    // Re-center on viewport resize so margins stay balanced.
     function onResize() {
-      setTx((v) => clamp(v, ty).x);
-      setTy((v) => clamp(tx, v).y);
+      recenter();
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
