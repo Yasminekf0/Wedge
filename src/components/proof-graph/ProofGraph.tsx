@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Github,
@@ -11,6 +12,7 @@ import {
   Globe,
   Link2,
   Box,
+  Send,
   X,
 } from "lucide-react";
 import type {
