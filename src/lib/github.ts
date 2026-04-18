@@ -16,10 +16,14 @@ export function getRateLimitRemaining(): number | null {
   return lastRemaining;
 }
 
+const GH_TOKEN = (import.meta.env.VITE_GITHUB_TOKEN as string | undefined)?.trim();
+
 async function ghFetch(path: string): Promise<Response> {
-  const res = await fetch(`https://api.github.com${path}`, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+  };
+  if (GH_TOKEN) headers.Authorization = `Bearer ${GH_TOKEN}`;
+  const res = await fetch(`https://api.github.com${path}`, { headers });
   recordRateLimit(res);
   return res;
 }
