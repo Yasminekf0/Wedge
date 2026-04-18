@@ -192,7 +192,14 @@ Paragraph 1 (1-3 sentences): Reference one specific thing from the citations on 
 
 Paragraph 2 (2-3 sentences): What you built / are building. Present tense. "I put together X because Y" or "I'm working through X — here's what I have so far." Link to the artifact if the user has provided one; if not, describe what it is in plain terms. Do not use the word "artifact" in the email — that's internal product language.
 
-Paragraph 3 (1-2 sentences): A link to the proof graph using the literal placeholder {proof-graph-url}, and a concrete next step. Concrete means: a specific question, a specific offer ("happy to walk through it if useful"), or a specific ask ("if you're open to a 15-min call next week, I'll send times"). NOT "let me know your thoughts." NOT "looking forward to connecting."
+Paragraph 3 (2-3 sentences): Introduce the proof graph before linking to it. Do not assume the reader knows what a "proof graph" is — that's internal product language. Introduce it in plain terms as evidence behind the candidate's claims, not a resume.
+
+Write it as naturally as possible. Good framings (vary the phrasing, do not always reuse the same template):
+- "Instead of a CV, here's a page I keep that links to the actual code behind anything I'd claim to have built: {proof-graph-url}"
+- "Rather than a resume, this is a live view of what I've actually shipped, every skill claim links to the code: {proof-graph-url}"
+- "I keep a running page of my work with links to the repos behind each thing rather than a CV: {proof-graph-url}"
+
+After introducing the link, close with one concrete next step: a specific question, a specific offer, or a specific time ask. NOT "let me know your thoughts." NOT "looking forward to hearing back."
 
 Sign off with just the candidate's first name on its own line. No "Best,", no "Thanks,", no "Cheers,".
 
