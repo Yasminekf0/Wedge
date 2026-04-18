@@ -54,7 +54,7 @@ function spanWidth(span: number): number {
   return span * COL_W + (span - 1) * COL_GAP;
 }
 
-const SECTION_ORDER: ClaimSection[] = ["projects", "achievements", "work", "education"];
+const SECTION_ORDER: ClaimSection[] = ["projects", "work", "achievements", "education"];
 const SECTION_LABEL: Record<ClaimSection, string> = {
   projects: "Projects",
   achievements: "Achievements",
