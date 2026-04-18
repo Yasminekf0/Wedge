@@ -400,26 +400,25 @@ function EvidenceRow({ ev }: { ev: Evidence }) {
 
 interface CardProps {
   claim: Claim;
-  expanded: boolean;
+  selected: boolean;
   dim: boolean;
   highlight: boolean;
   jobMatch: boolean;
-  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
   index: number;
   filterLabelById: Map<string, string>;
 }
 
 function ClaimCard({
   claim,
-  expanded,
+  selected,
   dim,
   highlight,
   jobMatch,
-  onToggle,
+  onSelect,
   index,
   filterLabelById,
 }: CardProps) {
-  // All cards share the same width regardless of claim.size.
   const width = spanWidth(1);
   const x = claim.position?.x ?? 0;
   const y = claim.position?.y ?? 0;
@@ -449,19 +448,19 @@ function ClaimCard({
       layout
       onClick={(e) => {
         e.stopPropagation();
-        onToggle(claim.id);
+        onSelect(claim.id);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onToggle(claim.id);
+          onSelect(claim.id);
         }
       }}
       initial={{ opacity: 0, y: 8 }}
       animate={{
         opacity: dim ? 0.25 : 1,
-        y: jobMatch && !expanded ? -3 : 0,
-        scale: dim ? 0.97 : jobMatch && !expanded ? 1.03 : 1,
+        y: jobMatch ? -3 : 0,
+        scale: dim ? 0.97 : jobMatch ? 1.03 : 1,
         filter: dim ? "saturate(0.3)" : "saturate(1)",
       }}
       transition={{
@@ -471,26 +470,21 @@ function ClaimCard({
         filter: { duration: 0.3, ease: "easeOut" },
         layout: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
       }}
-      whileHover={dim ? undefined : { scale: expanded ? 1 : jobMatch ? 1.05 : 1.02 }}
+      whileHover={dim ? undefined : { scale: jobMatch ? 1.05 : 1.02 }}
       className={[
         "absolute text-left",
         "rounded-lg border bg-background transition-shadow",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        jobMatch
-          ? "border-accent shadow-[0_0_0_1px_hsl(var(--accent)/0.45),0_16px_48px_-12px_hsl(var(--accent)/0.6)]"
-          : highlight && !expanded
-            ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
-            : "border-border",
-        expanded
-          ? jobMatch
-            ? "z-30 shadow-[0_0_0_1px_hsl(var(--accent)/0.5),0_28px_70px_-20px_hsl(var(--accent)/0.7)]"
-            : "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
+        selected
+          ? "border-accent shadow-[0_0_0_2px_hsl(var(--accent)/0.55),0_18px_50px_-14px_hsl(var(--accent)/0.6)] z-30"
           : jobMatch
-            ? "z-20 hover:shadow-[0_16px_40px_-12px_hsl(var(--accent)/0.7)]"
-            : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
+            ? "border-accent shadow-[0_0_0_1px_hsl(var(--accent)/0.45),0_16px_48px_-12px_hsl(var(--accent)/0.6)] z-20 hover:shadow-[0_16px_40px_-12px_hsl(var(--accent)/0.7)]"
+            : highlight
+              ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)] z-10"
+              : "border-border z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
       ].join(" ")}
       style={{ left: x, top: y, width, cursor: "pointer" }}
-      aria-expanded={expanded}
+      aria-pressed={selected}
     >
       <div className="flex items-start gap-3 px-4 pt-4 pb-3">
         <ClaimGlyph claim={claim} />
@@ -506,31 +500,108 @@ function ClaimCard({
         </div>
       </div>
 
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            key="evidence"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="space-y-2 px-4 pb-4">
-              {claim.evidence.map((ev, i) => (
-                <EvidenceRow key={i} ev={ev} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {tagEls.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-border/50 px-4 py-2">
           {tagEls}
         </div>
       )}
     </motion.button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Detail side panel
+// ---------------------------------------------------------------------------
+
+function ClaimDetailPanel({
+  claim,
+  filterLabelById,
+  onClose,
+}: {
+  claim: Claim | null;
+  filterLabelById: Map<string, string>;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {claim && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
+          />
+          {/* Panel */}
+          <motion.aside
+            key="panel"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col border-l border-border bg-background shadow-[-24px_0_60px_-20px_rgba(0,0,0,0.6)]"
+            role="dialog"
+            aria-label={claim.text}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+              <div className="flex items-start gap-3">
+                <ClaimGlyph claim={claim} />
+                <div>
+                  <div className="mono text-[10px] uppercase tracking-[0.18em] text-tertiary-fg">
+                    {SECTION_LABEL[claim.section]}
+                  </div>
+                  <h2 className="mt-1 text-[17px] font-medium leading-snug text-foreground">
+                    {claim.text}
+                  </h2>
+                  {claim.subtext && (
+                    <p className="mt-1 text-[14px] leading-snug text-muted-fg">
+                      {claim.subtext}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-6 py-5">
+              <div className="label-mono mb-3">Evidence</div>
+              <div className="space-y-2">
+                {claim.evidence.map((ev, i) => (
+                  <EvidenceRow key={i} ev={ev} />
+                ))}
+              </div>
+
+              {claim.tags.length > 0 && (
+                <>
+                  <div className="label-mono mb-3 mt-8">Tags</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {claim.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="mono rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-fg"
+                      >
+                        {filterLabelById.get(t) || t}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
