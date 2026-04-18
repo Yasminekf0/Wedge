@@ -106,7 +106,7 @@ function summariseProof(p: ProofGraph): string {
   const repos = p.topRepos
     .map((r) => `${r.name} (★${r.stargazers_count}) — ${r.description || "no description"}`)
     .join("; ");
-  return `GitHub @${p.user.login}, ${p.user.followers} followers, ${p.public_repos} public repos, ${p.totalStars} stars total. Top languages: ${p.topLanguages.join(", ") || "—"}. Top repos: ${repos || "—"}.`;
+  return `GitHub @${p.user.login}, ${p.user.followers} followers, ${p.user.public_repos} public repos, ${p.totalStars} stars total. Top languages: ${p.topLanguages.join(", ") || "—"}. Top repos: ${repos || "—"}.`;
 }
 
 // ---------- page ----------
