@@ -23,6 +23,7 @@ import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
+import { detectSlop, slopRegenInstruction } from "@/lib/slopFilter";
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
@@ -129,7 +130,12 @@ function WedgePage() {
   const [email, setEmail] = React.useState<EmailDraft | null>(null);
   const [emailError, setEmailError] = React.useState(false);
   const [emailLoading, setEmailLoading] = React.useState(false);
+  const [emailStage, setEmailStage] = React.useState<
+    "idle" | "drafting" | "checking" | "rewriting"
+  >("idle");
+  const [slopHint, setSlopHint] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [copiedSubject, setCopiedSubject] = React.useState(false);
 
   // Long-loading label timer
   React.useEffect(() => {
@@ -146,27 +152,66 @@ function WedgePage() {
     p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
+    voiceInstruction?: string,
   ) {
     setEmailError(false);
     setEmailLoading(true);
+    setSlopHint(null);
+    setEmailStage("drafting");
     try {
+      const baseData = {
+        mode: "email" as const,
+        jobMarkdown,
+        companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+        candidateSummary: summariseCandidate(p),
+        ideaJson: JSON.stringify(idea, null, 2),
+      };
+
       const res = await callClaudeFn({
-        data: {
-          mode: "email",
-          jobMarkdown,
-          companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-          candidateSummary: summariseCandidate(p),
-          ideaJson: JSON.stringify(idea, null, 2),
-        },
+        data: voiceInstruction
+          ? { ...baseData, extraUserInstruction: voiceInstruction }
+          : baseData,
       });
-      if (res.mode === "email") {
-        setEmail({ subject: res.subject, body: res.body });
+      if (res.mode !== "email") return;
+
+      let draft = { subject: res.subject, body: res.body };
+
+      // Slop filter — one-shot correction loop.
+      setEmailStage("checking");
+      const violations = detectSlop(draft);
+      if (violations.length > 0) {
+        setEmailStage("rewriting");
+        try {
+          const fixInstruction = [
+            voiceInstruction || "",
+            slopRegenInstruction(violations),
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+          const res2 = await callClaudeFn({
+            data: { ...baseData, extraUserInstruction: fixInstruction },
+          });
+          if (res2.mode === "email") {
+            draft = { subject: res2.subject, body: res2.body };
+            const second = detectSlop(draft);
+            if (second.length > 0) {
+              setSlopHint(
+                "Draft may still read slightly generic — tap Regenerate or edit before sending.",
+              );
+            }
+          }
+        } catch (e) {
+          console.error("slop regen failed", e);
+        }
       }
+
+      setEmail(draft);
     } catch (e) {
       console.error(e);
       setEmailError(true);
     } finally {
       setEmailLoading(false);
+      setEmailStage("idle");
     }
   }
 
@@ -508,12 +553,45 @@ function WedgePage() {
     await generateEmail(jobMd, proof, company, ideas[0]);
   }
 
+  async function regenerateBlunter() {
+    if (!ideas || ideas.length === 0) return;
+    await generateEmail(
+      jobMd,
+      proof,
+      company,
+      ideas[0],
+      "Make it 20% more direct. Cut hedges. Shorter sentences.",
+    );
+  }
+
+  async function regenerateWarmer() {
+    if (!ideas || ideas.length === 0) return;
+    await generateEmail(
+      jobMd,
+      proof,
+      company,
+      ideas[0],
+      "Keep the specificity but add a touch more warmth. One concrete human moment (a reaction, a minor aside). Not effusive.",
+    );
+  }
+
   async function copyEmail() {
     if (!email) return;
     try {
       await navigator.clipboard.writeText(email.body);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function copySubject() {
+    if (!email) return;
+    try {
+      await navigator.clipboard.writeText(email.subject);
+      setCopiedSubject(true);
+      setTimeout(() => setCopiedSubject(false), 1600);
     } catch {
       /* ignore */
     }
@@ -724,23 +802,57 @@ function WedgePage() {
                 <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
                   {email.body}
                 </pre>
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <button
                     type="button"
                     onClick={copyEmail}
-                    className="mono h-9 rounded-md bg-accent px-4 text-[12px] font-medium uppercase tracking-wider text-accent-fg transition-opacity hover:opacity-90"
+                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
                   >
                     {copied ? "Copied" : "Copy"}
                   </button>
                   <button
                     type="button"
+                    onClick={copySubject}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
+                  >
+                    {copiedSubject ? "Copied subject" : "Copy subject"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={regenerateEmail}
                     disabled={emailLoading}
-                    className="mono h-9 rounded-md border border-border bg-transparent px-4 text-[12px] font-medium uppercase tracking-wider text-foreground transition-colors hover:border-muted-fg disabled:opacity-60"
+                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
                   >
-                    {emailLoading ? "Working..." : "Regenerate"}
+                    {emailLoading
+                      ? emailStage === "rewriting"
+                        ? "Rewriting..."
+                        : emailStage === "checking"
+                          ? "Verifying voice..."
+                          : "Working..."
+                      : "Regenerate"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={regenerateBlunter}
+                    disabled={emailLoading}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    Blunter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={regenerateWarmer}
+                    disabled={emailLoading}
+                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    Warmer
                   </button>
                 </div>
+                {slopHint && (
+                  <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
+                    {slopHint}
+                  </p>
+                )}
               </div>
             )}
           </Section>

@@ -143,18 +143,62 @@ Return only valid JSON, no preamble, no markdown code fences:
   ]
 }`;
 
-const EMAIL_SYSTEM = `You are drafting a cold outreach email for a developer applying to a specific role. The email must not sound like AI wrote it. It should sound like a thoughtful technical person writing to a peer.
+const EMAIL_SYSTEM = `You are writing a cold outreach email for a developer applying to a specific role. The email will be sent from their personal inbox to a hiring manager or engineer at the target company.
 
-Rules:
-- Subject line: max 8 words, no exclamation marks, no "quick question", no "re:", no "introducing"
-- Body: 110–140 words, 3 short paragraphs
-- Paragraph 1: reference one specific thing from the job post OR the company's recent GitHub activity. Not generic. Cite a repo name, a release, a line from the job post, or a specific technical choice. Never say "I'm impressed by your work" or "I've been following your company." If the chosen artifact idea cites a specific blog post, release, or HN thread, reference that specific item by name in this paragraph. Example: "I read your postmortem on the Jan 2024 Postgres incident" is dramatically better than "I read your engineering blog."
-- Paragraph 2: describe the artifact the candidate is building. Frame it as "I'm putting together X because Y" where Y references paragraph 1. Present tense, not "I would build" — it's being made.
-- Paragraph 3: link to the proof graph (use the literal placeholder {proof-graph-url}), offer a short call, sign off. No "looking forward to hearing from you." No "best regards."
+The hard rule: the email must not sound like AI wrote it. If a recruiter reads it and thinks "this is a ChatGPT draft," the product has failed. Everything below is in service of that rule.
 
-Voice: direct, specific, zero hype. Write like a smart person explaining to a friend. No "excited," no "passionate," no "thrilled," no "amazing opportunity."
+VOCABULARY BANS — do not use any of these words or phrases, ever:
 
-Return only valid JSON, no preamble:
+- "delve", "delve into", "unpack", "dive into", "explore"
+- "leverage", "leveraging", "synergy", "synergies", "holistic"
+- "navigate", "navigating the complexities of", "in an ever-changing landscape"
+- "signals that", "underscores", "highlights the importance of"
+- "powerful", "robust", "seamless", "cutting-edge", "innovative", "impactful"
+- "passionate", "excited", "thrilled", "eager", "enthusiastic"
+- "reach out", "touch base", "circle back", "connect"
+- "ecosystem", "landscape", "space" (as in "the AI space")
+- "journey", "unlock", "empower", "elevate", "amplify"
+- "foster", "cultivate", "drive value", "move the needle"
+- "at the end of the day", "ultimately", "fundamentally"
+- "learnings" (the noun), "takeaways"
+
+TRANSITION WORD BANS — do not start any sentence or paragraph with:
+
+- "Moreover", "Furthermore", "Additionally", "That said", "Importantly", "Notably"
+- "In conclusion", "To summarize", "Overall"
+
+If you need to connect two ideas, use a period and start a new sentence, or use "and" / "but" / "so". That's how people write emails.
+
+STRUCTURAL BANS:
+
+- No "not X but Y" constructions. ("Not just a tool, but a platform." "Instead of Z, we did Y.") These are AI tells. If you want to contrast two things, do it in two sentences.
+- No staccato lists of three. ("It's fast, it's clean, it's reliable.") Pick one attribute and be specific about it.
+- No adverb-heavy phrasing. ("Quietly underscores", "dramatically improves", "fundamentally shifts".) Cut the adverb.
+- No tidy closing line that could apply to any email. ("Looking forward to hearing your thoughts." "Happy to chat whenever works." "Would love to connect.") End when you're done. A question or a concrete next step is fine; a warm wrap-up is not.
+- No bulleted lists. No bold text. No headers. Plain prose, three short paragraphs.
+- NO EM-DASHES. Zero. None. Not one. The em-dash character is strictly forbidden anywhere in the subject or body. This is the single most reliable AI tell and it is non-negotiable. Use a period, a comma, parentheses, or restructure the sentence. If you catch yourself about to use one, stop and rewrite. En-dashes and hyphens in compound words ("full-time") are fine. Em-dashes are not. This rule has no exceptions.
+
+VOICE:
+
+Write like a smart engineer firing off an email between meetings. Slightly clipped. Specific. Occasionally a bit dry. Contractions are fine ("I'm", "you've", "it's"). Sentence fragments are fine when they land. The tone is peer-to-peer, not applicant-to-gatekeeper.
+
+If you find yourself writing something that sounds like a LinkedIn post, delete it.
+
+STRUCTURE (this is non-negotiable):
+
+Subject line: 4-8 words. No "Quick question", no "Re:", no "Introducing", no "Reaching out", no "Hello from {name}". Should reference something specific — the artifact, the thing cited in paragraph 1, or the role. Lowercase is fine. Example good subjects: "built a thing after reading your postmortem", "question about the v2 auth redesign", "smokescreen integration i've been poking at".
+
+Paragraph 1 (1-3 sentences): Reference one specific thing from the citations on the chosen artifact idea. Cite it by name — the post title, the repo name, the release, or the exact phrase from the job post. Don't summarize the thing; assume they know what you're talking about. This is the paragraph that proves you actually read their stuff.
+
+Paragraph 2 (2-3 sentences): What you built / are building. Present tense. "I put together X because Y" or "I'm working through X — here's what I have so far." Link to the artifact if the user has provided one; if not, describe what it is in plain terms. Do not use the word "artifact" in the email — that's internal product language.
+
+Paragraph 3 (1-2 sentences): A link to the proof graph using the literal placeholder {proof-graph-url}, and a concrete next step. Concrete means: a specific question, a specific offer ("happy to walk through it if useful"), or a specific ask ("if you're open to a 15-min call next week, I'll send times"). NOT "let me know your thoughts." NOT "looking forward to connecting."
+
+Sign off with just the candidate's first name on its own line. No "Best,", no "Thanks,", no "Cheers,".
+
+LENGTH: 90-130 words in the body. Shorter is better. If you're over 130 words, cut the weakest sentence.
+
+Return only valid JSON, no preamble, no markdown fences:
 {
   "subject": "string",
   "body": "string with \\n\\n between paragraphs"
@@ -188,6 +232,7 @@ function emailUser(input: CallInput) {
   const company = (input.companySignalJson || "").slice(0, 10000);
   const candidate = (input.candidateSummary || "").slice(0, 3000);
   const idea = (input.ideaJson || "").slice(0, 2000);
+  const extra = (input.extraUserInstruction || "").slice(0, 2000);
   return `=== JOB POST ===
 ${job || "(none provided)"}
 
@@ -198,7 +243,7 @@ ${company || "(none provided)"}
 ${candidate || "(none provided)"}
 
 === CHOSEN ARTIFACT IDEA ===
-${idea || "(none provided)"}`;
+${idea || "(none provided)"}${extra ? `\n\n=== ADDITIONAL INSTRUCTION ===\n${extra}` : ""}`;
 }
 
 function extractJson(text: string): unknown {
