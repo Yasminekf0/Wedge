@@ -1,611 +1,744 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { Github, Linkedin, MapPin, X } from "lucide-react";
 import * as React from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import { Github, Linkedin, MapPin, RotateCcw, ExternalLink } from "lucide-react";
 import type {
-  EducationMeta,
-  ProjectMeta,
-  ProofCard,
-  ProofGroup,
+  Claim,
+  ClaimSection,
+  Evidence,
   ProofProfile,
-  WorkMeta,
 } from "./types";
 
-// ---------- generated visuals ----------
+// ---------------------------------------------------------------------------
+// Constants — board layout
+// ---------------------------------------------------------------------------
 
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
+const BOARD_W = 1400;
+const BOARD_H = 1240;
 
-function pickColor(seed: string, fallback?: string): string {
-  if (fallback) return fallback;
-  const palette = [
-    "#4c6ef5",
-    "#e8a87c",
-    "#73ffb8",
-    "#c44569",
-    "#c9a84c",
-    "#5cbdb9",
-    "#9b72cf",
-    "#a0c49d",
-  ];
-  return palette[hashString(seed) % palette.length];
-}
+const SECTION_ZONES: Record<
+  ClaimSection,
+  { label: string; labelX: number; labelY: number }
+> = {
+  projects: { label: "Projects", labelX: 40, labelY: 28 },
+  work: { label: "Work", labelX: 40, labelY: 600 },
+  education: { label: "Education", labelX: 40, labelY: 900 },
+};
 
-function AbstractVisual({
-  seed,
-  color,
-  variant = "blob",
-}: {
-  seed: string;
-  color: string;
-  variant?: "blob" | "grid" | "wave";
-}) {
-  const h = hashString(seed);
-  const dx = (h % 40) - 20;
-  const dy = ((h >> 3) % 30) - 15;
-  return (
-    <svg
-      viewBox="0 0 200 100"
-      className="h-full w-full"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id={`g-${seed}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.55" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.05" />
-        </linearGradient>
-      </defs>
-      <rect width="200" height="100" fill={`url(#g-${seed})`} />
-      {variant === "blob" && (
-        <circle
-          cx={120 + dx}
-          cy={50 + dy}
-          r={48}
-          fill={color}
-          fillOpacity="0.18"
-        />
-      )}
-      {variant === "grid" && (
-        <g stroke={color} strokeOpacity="0.25" strokeWidth="0.6">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <line key={`v${i}`} x1={i * 20} y1={0} x2={i * 20} y2={100} />
-          ))}
-          {Array.from({ length: 5 }).map((_, i) => (
-            <line key={`h${i}`} x1={0} y1={i * 20} x2={200} y2={i * 20} />
-          ))}
-        </g>
-      )}
-      {variant === "wave" && (
-        <path
-          d={`M0 ${60 + dy} Q 50 ${30 + dy} 100 ${60 + dy} T 200 ${60 + dy} V100 H0 Z`}
-          fill={color}
-          fillOpacity="0.22"
-        />
-      )}
-    </svg>
-  );
-}
+const SIZE_TO_WIDTH: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 220,
+  md: 290,
+  lg: 360,
+};
 
-// ---------- card renderers ----------
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
-function LanguageDot({ color }: { color: string }) {
+const LANGUAGE_COLORS: Record<string, string> = {
+  Rust: "#dea584",
+  TypeScript: "#3178c6",
+  JavaScript: "#f1e05a",
+  Go: "#00add8",
+  Python: "#3572a5",
+  C: "#aaaaaa",
+  "C++": "#f34b7d",
+  Ruby: "#701516",
+  Java: "#b07219",
+  Swift: "#f05138",
+  Kotlin: "#a97bff",
+};
+
+function LanguageDot({ lang }: { lang?: string }) {
+  if (!lang) return null;
+  const color = LANGUAGE_COLORS[lang] || "#888";
   return (
     <span
+      aria-hidden
       className="inline-block h-2 w-2 rounded-full"
       style={{ backgroundColor: color }}
-      aria-hidden
     />
   );
 }
 
-function CardShell({
-  children,
-  onClick,
-  highlight,
-  dim,
+// Auto-layout for claims without explicit positions. Loose, deterministic.
+function autoLayout(claims: Claim[]): Claim[] {
+  const buckets: Record<ClaimSection, Claim[]> = {
+    projects: [],
+    work: [],
+    education: [],
+  };
+  for (const c of claims) buckets[c.section].push(c);
+
+  const zoneTops: Record<ClaimSection, number> = {
+    projects: 70,
+    work: 640,
+    education: 940,
+  };
+
+  return claims.map((c) => {
+    if (c.position) return c;
+    const idx = buckets[c.section].indexOf(c);
+    const col = idx % 3;
+    const row = Math.floor(idx / 3);
+    const jitterX = ((idx * 53) % 40) - 20;
+    const jitterY = ((idx * 31) % 30) - 15;
+    return {
+      ...c,
+      position: {
+        x: 60 + col * 420 + jitterX,
+        y: zoneTops[c.section] + row * 220 + jitterY,
+      },
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
+function ProofHeaderBar({ profile }: { profile: ProofProfile }) {
+  const { header } = profile;
+  return (
+    <div className="border-b border-border bg-background">
+      <div className="mx-auto flex w-full max-w-[1400px] items-center gap-4 px-6 py-4">
+        <img
+          src={header.avatar}
+          alt=""
+          className="h-12 w-12 rounded-md border border-border object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="text-[18px] font-medium tracking-tight text-foreground">
+              {header.name}
+            </h1>
+            <span className="mono inline-flex items-center gap-1 text-[12px] text-tertiary-fg">
+              <MapPin className="h-3 w-3" aria-hidden />
+              {header.location}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[14px] text-muted-fg">{header.bio}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {header.linkedin && (
+            <a
+              href={header.linkedin}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="LinkedIn"
+              className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Linkedin className="h-4 w-4" />
+            </a>
+          )}
+          {header.github && (
+            <a
+              href={header.github}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+              className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar
+// ---------------------------------------------------------------------------
+
+function FilterBar({
+  profile,
+  active,
+  onToggle,
+  onClear,
 }: {
-  children: React.ReactNode;
-  onClick: () => void;
-  highlight: boolean;
-  dim: boolean;
+  profile: ProofProfile;
+  active: Set<string>;
+  onToggle: (id: string) => void;
+  onClear: () => void;
 }) {
+  return (
+    <div className="border-b border-border bg-background">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-2 px-6 py-3">
+        <span className="label-mono mr-1">Filter</span>
+        {profile.filters.map((f) => {
+          const isActive = active.has(f.id);
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onToggle(f.id)}
+              aria-pressed={isActive}
+              className={[
+                "mono rounded-full border px-3 py-1 text-[11px] uppercase tracking-wider transition-colors",
+                isActive
+                  ? "border-accent bg-accent text-accent-fg"
+                  : "border-border text-muted-fg hover:border-muted-fg hover:text-foreground",
+              ].join(" ")}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+        {active.size > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="mono ml-2 text-[11px] uppercase tracking-wider text-tertiary-fg underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section labels (floating on the board)
+// ---------------------------------------------------------------------------
+
+function SectionLabels() {
+  return (
+    <>
+      {(Object.keys(SECTION_ZONES) as ClaimSection[]).map((s) => {
+        const z = SECTION_ZONES[s];
+        return (
+          <div
+            key={s}
+            className="mono pointer-events-none absolute select-none text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg"
+            style={{ left: z.labelX, top: z.labelY }}
+          >
+            {z.label}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Evidence row
+// ---------------------------------------------------------------------------
+
+function EvidenceRow({ ev }: { ev: Evidence }) {
+  const inner = (
+    <div className="group/ev flex items-start gap-3 rounded-md border border-border/60 px-3 py-2.5 transition-colors hover:border-muted-fg">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <LanguageDot lang={ev.language} />
+          <span className="text-[14px] font-medium text-foreground">
+            {ev.title}
+          </span>
+          {ev.meta && (
+            <span className="mono text-[11px] text-tertiary-fg">{ev.meta}</span>
+          )}
+        </div>
+        {ev.description && (
+          <p className="mt-1 text-[13px] leading-snug text-muted-fg">
+            {ev.description}
+          </p>
+        )}
+      </div>
+      {ev.url && (
+        <ExternalLink
+          className="mt-1 h-3.5 w-3.5 shrink-0 text-tertiary-fg transition-colors group-hover/ev:text-foreground"
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+  if (!ev.url) return inner;
+  return (
+    <a
+      href={ev.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="block"
+    >
+      {inner}
+    </a>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claim card
+// ---------------------------------------------------------------------------
+
+interface CardProps {
+  claim: Claim;
+  expanded: boolean;
+  dim: boolean;
+  highlight: boolean;
+  onToggle: (id: string) => void;
+  index: number;
+  filterLabelById: Map<string, string>;
+}
+
+function ClaimCard({
+  claim,
+  expanded,
+  dim,
+  highlight,
+  onToggle,
+  index,
+  filterLabelById,
+}: CardProps) {
+  const width = SIZE_TO_WIDTH[claim.size || "md"];
+  const x = claim.position?.x ?? 0;
+  const y = claim.position?.y ?? 0;
+
+  const tagEls: React.ReactNode[] = [];
+  claim.tags.slice(0, 5).forEach((t, i) => {
+    if (i > 0) {
+      tagEls.push(
+        <span key={`sep-${i}`} className="mono text-[10px] text-tertiary-fg/60">
+          ·
+        </span>,
+      );
+    }
+    tagEls.push(
+      <span
+        key={t}
+        className="mono text-[10px] uppercase tracking-wider text-tertiary-fg"
+      >
+        {filterLabelById.get(t) || t}
+      </span>,
+    );
+  });
+
   return (
     <motion.button
       type="button"
-      onClick={onClick}
       layout
-      animate={{
-        opacity: dim ? 0.2 : 1,
-        scale: dim ? 0.95 : highlight ? 1.04 : 1,
-        filter: dim ? "saturate(0.2)" : "saturate(1)",
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(claim.id);
       }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ scale: dim ? 0.97 : 1.05, filter: "saturate(1)" }}
-      className={cn(
-        "group relative w-[260px] overflow-hidden rounded-lg border text-left",
-        "bg-background/40 backdrop-blur-sm",
-        "shadow-[0_1px_0_rgba(255,255,255,0.02)_inset,0_8px_24px_-12px_rgba(0,0,0,0.5)]",
-        "hover:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_16px_32px_-12px_rgba(0,0,0,0.7)]",
-        "transition-shadow",
-      )}
-      style={{ borderColor: "var(--border)" }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle(claim.id);
+        }
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{
+        opacity: dim ? 0.25 : 1,
+        y: 0,
+        scale: dim ? 0.97 : 1,
+        filter: dim ? "saturate(0.3)" : "saturate(1)",
+      }}
+      transition={{
+        opacity: { duration: 0.3, delay: index * 0.04, ease: "easeOut" },
+        y: { duration: 0.4, delay: index * 0.04, ease: "easeOut" },
+        scale: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+        filter: { duration: 0.3, ease: "easeOut" },
+        layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+      }}
+      whileHover={dim ? undefined : { scale: expanded ? 1 : 1.02 }}
+      className={[
+        "absolute text-left",
+        "rounded-lg border bg-background",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        highlight && !expanded
+          ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
+          : "border-border",
+        expanded
+          ? "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
+          : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
+      ].join(" ")}
+      style={{ left: x, top: y, width, cursor: "pointer" }}
+      aria-expanded={expanded}
     >
-      {children}
+      <div className="px-4 pt-4 pb-3">
+        <p className="text-[15px] font-medium leading-snug text-foreground">
+          {claim.text}
+        </p>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="evidence"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2 px-4 pb-4">
+              {claim.evidence.map((ev, i) => (
+                <EvidenceRow key={i} ev={ev} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {tagEls.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-border/50 px-4 py-2">
+          {tagEls}
+        </div>
+      )}
     </motion.button>
   );
 }
 
-function ProjectCard({
-  card,
-  onClick,
-  highlight,
-  dim,
-}: {
-  card: ProofCard;
-  onClick: () => void;
-  highlight: boolean;
-  dim: boolean;
-}) {
-  const meta = card.meta as ProjectMeta;
-  const color = pickColor(card.title, meta.languageColor);
-  return (
-    <CardShell onClick={onClick} highlight={highlight} dim={dim}>
-      <div className="h-20 w-full">
-        {card.visual ? (
-          <img
-            src={card.visual}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <AbstractVisual seed={card.title} color={color} variant="blob" />
-        )}
-      </div>
-      <div className="space-y-1.5 px-3.5 py-3">
-        <div className="text-[15px] font-medium text-foreground">
-          {card.title}
-        </div>
-        <div className="text-[13px] leading-snug text-muted-fg">
-          {card.description}
-        </div>
-        {meta.language && (
-          <div className="mono flex items-center gap-1.5 pt-1 text-[11px] text-tertiary-fg">
-            <LanguageDot color={color} />
-            {meta.language}
-          </div>
-        )}
-      </div>
-    </CardShell>
-  );
+// ---------------------------------------------------------------------------
+// Pannable board
+// ---------------------------------------------------------------------------
+
+interface BoardProps {
+  claims: Claim[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  activeFilters: Set<string>;
+  filterLabelById: Map<string, string>;
 }
 
-function EducationCard({
-  card,
-  onClick,
-  highlight,
-  dim,
-}: {
-  card: ProofCard;
-  onClick: () => void;
-  highlight: boolean;
-  dim: boolean;
-}) {
-  const meta = card.meta as EducationMeta;
-  const color = pickColor(meta.institution, meta.crestColor);
-  const initials = meta.institution
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-  return (
-    <CardShell onClick={onClick} highlight={highlight} dim={dim}>
-      <div className="flex items-start gap-3 px-3.5 py-3.5">
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-medium"
-          style={{
-            backgroundColor: `${color}22`,
-            color,
-            border: `1px solid ${color}55`,
-          }}
-        >
-          {initials}
-        </div>
-        <div className="min-w-0 space-y-1">
-          <div className="text-[15px] font-medium text-foreground">
-            {meta.institution}
-          </div>
-          <div className="text-[13px] leading-snug text-muted-fg">
-            {meta.program}
-          </div>
-          {meta.years && (
-            <div className="mono pt-0.5 text-[11px] text-tertiary-fg">
-              {meta.years}
-            </div>
-          )}
-        </div>
-      </div>
-    </CardShell>
-  );
-}
-
-function WorkCard({
-  card,
-  onClick,
-  highlight,
-  dim,
-}: {
-  card: ProofCard;
-  onClick: () => void;
-  highlight: boolean;
-  dim: boolean;
-}) {
-  const meta = card.meta as WorkMeta;
-  const color = pickColor(meta.company, meta.accentColor);
-  return (
-    <CardShell onClick={onClick} highlight={highlight} dim={dim}>
-      <div className="h-16 w-full">
-        <AbstractVisual seed={meta.company} color={color} variant="wave" />
-      </div>
-      <div className="flex items-start gap-3 px-3.5 py-3">
-        {meta.logoUrl ? (
-          <img
-            src={meta.logoUrl}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-md object-cover"
-          />
-        ) : (
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[12px] font-semibold"
-            style={{
-              backgroundColor: `${color}22`,
-              color,
-              border: `1px solid ${color}55`,
-            }}
-          >
-            {meta.company[0]}
-          </div>
-        )}
-        <div className="min-w-0 space-y-1">
-          <div className="text-[15px] font-medium text-foreground">
-            {meta.role}{" "}
-            <span className="text-muted-fg">· {meta.company}</span>
-          </div>
-          <div className="text-[13px] leading-snug text-muted-fg">
-            {card.description}
-          </div>
-        </div>
-      </div>
-    </CardShell>
-  );
-}
-
-function CardRouter(props: {
-  card: ProofCard;
-  onClick: () => void;
-  highlight: boolean;
-  dim: boolean;
-}) {
-  if (props.card.type === "project") return <ProjectCard {...props} />;
-  if (props.card.type === "education") return <EducationCard {...props} />;
-  return <WorkCard {...props} />;
-}
-
-// ---------- group region ----------
-
-function Group({
-  group,
-  onCardClick,
-  jobLoaded,
-  index,
-}: {
-  group: ProofGroup;
-  onCardClick: (c: ProofCard) => void;
-  jobLoaded: boolean;
-  index: number;
-}) {
-  if (group.items.length === 0) return null;
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.05 + index * 0.06 }}
-      className="rounded-2xl bg-foreground/[0.02] p-5 sm:p-6"
-    >
-      <div className="label-mono mb-4">{group.label}</div>
-      <div className="flex flex-wrap gap-4">
-        {group.items.map((card, i) => {
-          const dim = jobLoaded && card.relevant === false;
-          const highlight = jobLoaded && card.relevant === true;
-          return (
-            <motion.div
-              key={card.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.35,
-                delay: 0.1 + index * 0.06 + i * 0.04,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-            >
-              <CardRouter
-                card={card}
-                onClick={() => onCardClick(card)}
-                highlight={highlight}
-                dim={dim}
-              />
-            </motion.div>
-          );
-        })}
-      </div>
-    </motion.section>
-  );
-}
-
-// ---------- pannable canvas ----------
-
-function PannableCanvas({ children }: { children: React.ReactNode }) {
-  const wrapperRef = React.useRef<HTMLDivElement>(null);
-  const innerRef = React.useRef<HTMLDivElement>(null);
-  const drag = React.useRef<{
+function PannableBoard({
+  claims,
+  expandedId,
+  onToggle,
+  activeFilters,
+  filterLabelById,
+}: BoardProps) {
+  const viewportRef = React.useRef<HTMLDivElement>(null);
+  const [tx, setTx] = React.useState(0);
+  const [ty, setTy] = React.useState(0);
+  const [isDragging, setDragging] = React.useState(false);
+  const dragState = React.useRef<{
     startX: number;
     startY: number;
-    scrollX: number;
-    scrollY: number;
-    active: boolean;
-  }>({ startX: 0, startY: 0, scrollX: 0, scrollY: 0, active: false });
+    baseX: number;
+    baseY: number;
+  } | null>(null);
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    // Only pan when grabbing the background, not a card.
-    if ((e.target as HTMLElement).closest("button, a")) return;
-    const el = wrapperRef.current;
-    if (!el) return;
-    drag.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      scrollX: el.scrollLeft,
-      scrollY: el.scrollTop,
-      active: true,
+  const clamp = React.useCallback((nx: number, ny: number) => {
+    const vp = viewportRef.current;
+    if (!vp) return { x: nx, y: ny };
+    const w = vp.clientWidth;
+    const h = vp.clientHeight;
+    const minX = Math.min(0, w - BOARD_W);
+    const minY = Math.min(0, h - BOARD_H);
+    return {
+      x: Math.min(0, Math.max(minX, nx)),
+      y: Math.min(0, Math.max(minY, ny)),
     };
-    el.setPointerCapture(e.pointerId);
-    el.style.cursor = "grabbing";
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag.current.active) return;
-    const el = wrapperRef.current;
-    if (!el) return;
-    el.scrollLeft = drag.current.scrollX - (e.clientX - drag.current.startX);
-    el.scrollTop = drag.current.scrollY - (e.clientY - drag.current.startY);
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    drag.current.active = false;
-    const el = wrapperRef.current;
-    if (el) {
-      el.releasePointerCapture(e.pointerId);
-      el.style.cursor = "grab";
+  }, []);
+
+  const recenter = React.useCallback(() => {
+    // Default view: top-left aligned (densest zone visible).
+    const { x, y } = clamp(0, 0);
+    setTx(x);
+    setTy(y);
+  }, [clamp]);
+
+  React.useEffect(() => {
+    recenter();
+    // Re-clamp on viewport resize.
+    function onResize() {
+      setTx((v) => clamp(v, ty).x);
+      setTy((v) => clamp(tx, v).y);
     }
-  };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pointer-based drag panning on background.
+  React.useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const s = dragState.current;
+      if (!s) return;
+      const dx = e.clientX - s.startX;
+      const dy = e.clientY - s.startY;
+      const { x, y } = clamp(s.baseX + dx, s.baseY + dy);
+      setTx(x);
+      setTy(y);
+    }
+    function onUp() {
+      setDragging(false);
+      dragState.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+    function onDown(e: PointerEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-card]")) return;
+      dragState.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX: tx,
+        baseY: ty,
+      };
+      setDragging(true);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    }
+    const vp = viewportRef.current;
+    vp?.addEventListener("pointerdown", onDown);
+    return () => {
+      vp?.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [tx, ty, clamp]);
+
+  // Wheel / trackpad pan.
+  React.useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const { x, y } = clamp(tx - e.deltaX, ty - e.deltaY);
+      setTx(x);
+      setTy(y);
+    }
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, [tx, ty, clamp]);
+
+  // Arrow key panning.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const step = 60;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = step;
+      else if (e.key === "ArrowRight") dx = -step;
+      else if (e.key === "ArrowUp") dy = step;
+      else if (e.key === "ArrowDown") dy = -step;
+      else return;
+      e.preventDefault();
+      const { x, y } = clamp(tx + dx, ty + dy);
+      setTx(x);
+      setTy(y);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tx, ty, clamp]);
+
+  const visibleHighlight = activeFilters.size > 0;
+  const matches = (c: Claim) =>
+    !visibleHighlight || c.tags.some((t) => activeFilters.has(t));
+  const allDimmed =
+    visibleHighlight && claims.every((c) => !matches(c));
 
   return (
     <div
-      ref={wrapperRef}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      className="relative overflow-auto"
-      style={{ cursor: "grab", maxHeight: "calc(100vh - 220px)" }}
+      ref={viewportRef}
+      className="relative flex-1 select-none overflow-hidden"
+      style={{ cursor: isDragging ? "grabbing" : "grab", touchAction: "none" }}
     >
-      <div ref={innerRef} className="min-w-full">
-        {children}
+      <div
+        className="relative origin-top-left"
+        style={{
+          width: BOARD_W,
+          height: BOARD_H,
+          transform: `translate3d(${tx}px, ${ty}px, 0)`,
+          transition: isDragging
+            ? "none"
+            : "transform 250ms cubic-bezier(0.22, 1, 0.36, 1)",
+          backgroundImage:
+            "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      >
+        <SectionLabels />
+
+        {claims.map((claim, i) => {
+          const isMatch = matches(claim);
+          const dim = visibleHighlight && !isMatch;
+          const highlight = visibleHighlight && isMatch;
+          return (
+            <div key={claim.id} data-card>
+              <ClaimCard
+                claim={claim}
+                expanded={expandedId === claim.id}
+                dim={dim}
+                highlight={highlight}
+                onToggle={onToggle}
+                index={i}
+                filterLabelById={filterLabelById}
+              />
+            </div>
+          );
+        })}
       </div>
+
+      {/* Edge fades */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-12 bg-gradient-to-r from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-12 bg-gradient-to-l from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-10 bg-gradient-to-b from-background to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-10 bg-gradient-to-t from-background to-transparent" />
+
+      {allDimmed && (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 mx-auto w-fit -translate-y-1/2 rounded-md border border-border bg-background/90 px-4 py-2 backdrop-blur">
+          <p className="mono text-[12px] uppercase tracking-wider text-muted-fg">
+            No claims match these filters.
+          </p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={recenter}
+        aria-label="Recenter board"
+        className="mono absolute bottom-4 right-4 z-40 inline-flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:border-muted-fg hover:text-foreground"
+      >
+        <RotateCcw className="h-3 w-3" />
+        Recenter
+      </button>
     </div>
   );
 }
 
-// ---------- detail panel ----------
-
-function DetailPanel({
-  card,
-  onClose,
-}: {
-  card: ProofCard | null;
-  onClose: () => void;
-}) {
-  return (
-    <Sheet open={!!card} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-full overflow-y-auto sm:max-w-lg"
-      >
-        {card && (
-          <div className="space-y-6 p-2">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="label-mono">{card.type}</div>
-                <h2 className="mt-1 text-[22px] font-medium text-foreground">
-                  {card.title}
-                </h2>
-              </div>
-              <button
-                onClick={onClose}
-                className="rounded-md p-1.5 text-muted-fg hover:bg-foreground/5 hover:text-foreground"
-                aria-label="Close"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <p className="text-[15px] leading-relaxed text-muted-fg">
-              {card.description}
-            </p>
-            {card.detail && (
-              <div className="whitespace-pre-wrap rounded-lg bg-foreground/[0.03] p-4 text-[14px] leading-relaxed text-foreground/90">
-                {card.detail}
-              </div>
-            )}
-            {card.type === "project" &&
-              (card.meta as ProjectMeta).url && (
-                <a
-                  href={(card.meta as ProjectMeta).url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mono inline-block text-[12px] text-foreground underline underline-offset-4 hover:opacity-70"
-                >
-                  Open repo ↗
-                </a>
-              )}
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// ---------- header ----------
-
-function ProfileHeader({ header }: { header: ProofProfile["header"] }) {
-  const initials = header.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-  return (
-    <header className="flex items-center gap-4 pb-8">
-      {header.avatar ? (
-        <img
-          src={header.avatar}
-          alt={header.name}
-          className="h-14 w-14 rounded-full object-cover"
-        />
-      ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground/5 text-[14px] font-medium text-foreground">
-          {initials}
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <h1 className="text-[20px] font-medium leading-tight text-foreground">
-          {header.name}
-        </h1>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-fg">
-          {header.location && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin size={12} />
-              {header.location}
-            </span>
-          )}
-          {header.bio && <span className="text-muted-fg">· {header.bio}</span>}
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
-        {header.github && (
-          <a
-            href={header.github}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md p-2 text-muted-fg hover:bg-foreground/5 hover:text-foreground"
-            aria-label="GitHub"
-          >
-            <Github size={16} />
-          </a>
-        )}
-        {header.linkedin && (
-          <a
-            href={header.linkedin}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md p-2 text-muted-fg hover:bg-foreground/5 hover:text-foreground"
-            aria-label="LinkedIn"
-          >
-            <Linkedin size={16} />
-          </a>
-        )}
-      </div>
-    </header>
-  );
-}
-
-// ---------- sparse fallback list ----------
+// ---------------------------------------------------------------------------
+// Sparse fallback (vertical list)
+// ---------------------------------------------------------------------------
 
 function SparseList({
-  groups,
-  onCardClick,
-  jobLoaded,
+  claims,
+  expandedId,
+  onToggle,
+  activeFilters,
+  filterLabelById,
 }: {
-  groups: ProofGroup[];
-  onCardClick: (c: ProofCard) => void;
-  jobLoaded: boolean;
+  claims: Claim[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  activeFilters: Set<string>;
+  filterLabelById: Map<string, string>;
 }) {
+  const visibleHighlight = activeFilters.size > 0;
   return (
-    <div className="space-y-8">
-      {groups.map((g) =>
-        g.items.length === 0 ? null : (
-          <section key={g.id}>
-            <div className="label-mono mb-3">{g.label}</div>
-            <div className="flex flex-col gap-3">
-              {g.items.map((card) => {
-                const dim = jobLoaded && card.relevant === false;
-                const highlight = jobLoaded && card.relevant === true;
-                return (
-                  <CardRouter
-                    key={card.id}
-                    card={card}
-                    onClick={() => onCardClick(card)}
-                    highlight={highlight}
-                    dim={dim}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        ),
-      )}
+    <div className="mx-auto w-full max-w-[640px] flex-1 space-y-4 overflow-auto px-6 py-10">
+      {claims.map((c) => {
+        const isMatch =
+          !visibleHighlight || c.tags.some((t) => activeFilters.has(t));
+        const dim = visibleHighlight && !isMatch;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onToggle(c.id)}
+            className={[
+              "block w-full rounded-lg border border-border bg-background p-4 text-left transition-all",
+              dim ? "opacity-25 saturate-50" : "opacity-100",
+            ].join(" ")}
+          >
+            <p className="text-[15px] font-medium text-foreground">{c.text}</p>
+            {expandedId === c.id && (
+              <div className="mt-3 space-y-2">
+                {c.evidence.map((ev, i) => (
+                  <EvidenceRow key={i} ev={ev} />
+                ))}
+              </div>
+            )}
+            {c.tags.length > 0 && (
+              <p className="mono mt-3 text-[10px] uppercase tracking-wider text-tertiary-fg">
+                {c.tags.map((t) => filterLabelById.get(t) || t).join(" · ")}
+              </p>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ---------- main ----------
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 export function ProofGraph({ profile }: { profile: ProofProfile }) {
-  const [active, setActive] = React.useState<ProofCard | null>(null);
-  const total = profile.groups.reduce((acc, g) => acc + g.items.length, 0);
-  const jobLoaded = !!profile.jobLoaded;
-  const sparse = total < 6;
+  const claims = React.useMemo(
+    () => autoLayout(profile.claims),
+    [profile.claims],
+  );
+  const filterLabelById = React.useMemo(
+    () => new Map(profile.filters.map((f) => [f.id, f.label])),
+    [profile.filters],
+  );
+
+  const initialActive = React.useMemo(() => {
+    if (profile.jobLoaded && profile.jobActiveFilterIds?.length) {
+      return new Set(profile.jobActiveFilterIds);
+    }
+    return new Set<string>();
+  }, [profile.jobLoaded, profile.jobActiveFilterIds]);
+
+  const [activeFilters, setActiveFilters] =
+    React.useState<Set<string>>(initialActive);
+
+  React.useEffect(() => {
+    setActiveFilters(initialActive);
+  }, [initialActive]);
+
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
+  const toggleFilter = React.useCallback((id: string) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearFilters = React.useCallback(() => {
+    setActiveFilters(new Set());
+  }, []);
+
+  const toggleClaim = React.useCallback((id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setExpandedId(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const sparse = claims.length < 5;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-10">
-      <ProfileHeader header={profile.header} />
-
+    <div className="flex h-screen flex-col">
+      <ProofHeaderBar profile={profile} />
+      <FilterBar
+        profile={profile}
+        active={activeFilters}
+        onToggle={toggleFilter}
+        onClear={clearFilters}
+      />
       {sparse ? (
         <SparseList
-          groups={profile.groups}
-          onCardClick={setActive}
-          jobLoaded={jobLoaded}
+          claims={claims}
+          expandedId={expandedId}
+          onToggle={toggleClaim}
+          activeFilters={activeFilters}
+          filterLabelById={filterLabelById}
         />
       ) : (
-        <PannableCanvas>
-          <div className="flex flex-col gap-6 pb-6">
-            {profile.groups.map((g, i) => (
-              <Group
-                key={g.id}
-                group={g}
-                index={i}
-                onCardClick={setActive}
-                jobLoaded={jobLoaded}
-              />
-            ))}
-          </div>
-        </PannableCanvas>
+        <PannableBoard
+          claims={claims}
+          expandedId={expandedId}
+          onToggle={toggleClaim}
+          activeFilters={activeFilters}
+          filterLabelById={filterLabelById}
+        />
       )}
-
-      <AnimatePresence>
-        <DetailPanel card={active} onClose={() => setActive(null)} />
-      </AnimatePresence>
     </div>
   );
 }

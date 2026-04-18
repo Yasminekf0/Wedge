@@ -11,7 +11,7 @@ export const Route = createFileRoute("/proof-graph")({
       {
         name: "description",
         content:
-          "A visual replacement for a CV. Real work, grouped and interactive.",
+          "A CV replacement. Every item is a claim, paired with the evidence that backs it up.",
       },
     ],
   }),
@@ -25,20 +25,16 @@ function ProofGraphPage() {
   );
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-6">
-        <div className="mono text-[12px] uppercase tracking-wider text-tertiary-fg">
-          wedge / proof graph
-        </div>
-        <button
-          type="button"
-          onClick={() => setJobLoaded((v) => !v)}
-          className="mono rounded-md border border-border px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
-        >
-          {jobLoaded ? "clear job" : "simulate job match"}
-        </button>
-      </div>
+    <div className="relative">
       <ProofGraph profile={profile} />
+      {/* Demo-only toggle, top-right corner */}
+      <button
+        type="button"
+        onClick={() => setJobLoaded((v) => !v)}
+        className="mono fixed right-4 top-4 z-50 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:bg-foreground/5 hover:text-foreground"
+      >
+        {jobLoaded ? "clear job" : "simulate job match"}
+      </button>
     </div>
   );
 }
