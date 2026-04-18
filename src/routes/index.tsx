@@ -596,7 +596,15 @@ function WedgePage() {
           disabled={loading}
           className="mt-2 mono h-11 w-full rounded-md bg-accent text-[13px] font-medium tracking-wider uppercase text-accent-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? (longLoading ? "Still working..." : "Working...") : "Generate"}
+          {loading
+            ? ideasStage === "regenerating"
+              ? "Regenerating grounded ideas..."
+              : ideasStage === "verifying"
+                ? "Verifying sources..."
+                : longLoading
+                  ? "Still working..."
+                  : "Working..."
+            : "Generate"}
         </button>
       </div>
 
@@ -688,6 +696,11 @@ function WedgePage() {
                 {ideas.map((idea, i) => (
                   <IdeaBlock key={i} index={i + 1} idea={idea} />
                 ))}
+                {shortIdeasNote && (
+                  <p className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
+                    {shortIdeasNote}
+                  </p>
+                )}
               </div>
             )}
           </Section>
