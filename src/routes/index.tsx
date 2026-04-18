@@ -169,6 +169,8 @@ function WedgePage() {
     jobMarkdown: string,
     c: CompanySignal | null,
     p: CandidateProof | null,
+    b: BlogSignal | null,
+    h: HNSignal | null,
   ) {
     let firstIdea: ArtifactIdea | null = null;
     try {
@@ -177,6 +179,8 @@ function WedgePage() {
           mode: "ideas",
           jobMarkdown,
           companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+          blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
+          hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
           candidateSummary: summariseCandidate(p),
         },
       });
