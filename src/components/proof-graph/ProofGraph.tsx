@@ -167,7 +167,10 @@ interface LayoutResult {
   height: number;
 }
 
-function autoLayout(rawClaims: Claim[]): LayoutResult {
+function autoLayout(
+  rawClaims: Claim[],
+  expandedIds: Set<string> = new Set(),
+): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
     achievements: [],
@@ -197,7 +200,11 @@ function autoLayout(rawClaims: Claim[]): LayoutResult {
         rowMaxH = 0;
       }
       const x = PAD_X + col * (COL_W + COL_GAP);
-      const h = SIZE_TO_HEIGHT[c.size || "md"];
+      const baseH = SIZE_TO_HEIGHT[c.size || "md"];
+      // Reserve extra room for pre-expanded cards so neighbors don't overlap.
+      const evidenceCount = c.evidence.length || 1;
+      const expandBonus = expandedIds.has(c.id) ? 28 + evidenceCount * 64 : 0;
+      const h = baseH + expandBonus;
       positioned.set(c.id, { ...c, position: { x, y: rowY } });
       col += span;
       rowMaxH = Math.max(rowMaxH, h);
@@ -538,7 +545,7 @@ interface BoardProps {
   claims: Claim[];
   sections: Array<{ section: ClaimSection; y: number }>;
   boardHeight: number;
-  expandedId: string | null;
+  expandedIds: Set<string>;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
@@ -549,7 +556,7 @@ function PannableBoard({
   claims,
   sections,
   boardHeight,
-  expandedId,
+  expandedIds,
   onToggle,
   activeFilters,
   filterLabelById,
@@ -709,7 +716,7 @@ function PannableBoard({
             <div key={claim.id} data-card>
               <ClaimCard
                 claim={claim}
-                expanded={expandedId === claim.id}
+                expanded={expandedIds.has(claim.id)}
                 dim={dim}
                 highlight={highlight}
                 jobMatch={jobMatchedIds.has(claim.id)}
@@ -746,13 +753,13 @@ function PannableBoard({
 
 function SparseList({
   claims,
-  expandedId,
+  expandedIds,
   onToggle,
   activeFilters,
   filterLabelById,
 }: {
   claims: Claim[];
-  expandedId: string | null;
+  expandedIds: Set<string>;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
@@ -775,7 +782,7 @@ function SparseList({
             ].join(" ")}
           >
             <p className="text-[15px] font-medium text-foreground">{c.text}</p>
-            {expandedId === c.id && (
+            {expandedIds.has(c.id) && (
               <div className="mt-3 space-y-2">
                 {c.evidence.map((ev, i) => (
                   <EvidenceRow key={i} ev={ev} />
@@ -820,28 +827,19 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     [profile.jobLoaded, jobFilterIds],
   );
 
-  // When a job is loaded, rearrange the board: matched claims get promoted
-  // (size lg, listed first inside their section) and unmatched claims get
-  // demoted (size sm, listed last). Layout flows them so matches naturally
-  // occupy the top-left / center, unmatched ones drift to the edges.
+  // When a job is loaded, keep all cards the same size but reorder so matched
+  // claims flow first inside their section (taking the prominent top-left
+  // slots). Highlighting + auto-expand do the visual work.
   const arrangedClaims = React.useMemo(() => {
     if (!profile.jobLoaded) return profile.claims;
     const matched: Claim[] = [];
     const rest: Claim[] = [];
     for (const c of profile.claims) {
-      if (isJobMatch(c)) {
-        matched.push({ ...c, size: "lg" });
-      } else {
-        rest.push({ ...c, size: "sm" });
-      }
+      if (isJobMatch(c)) matched.push(c);
+      else rest.push(c);
     }
     return [...matched, ...rest];
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
-
-  const { claims, sections, height: boardHeight } = React.useMemo(
-    () => autoLayout(arrangedClaims),
-    [arrangedClaims],
-  );
 
   const jobMatchedIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -850,6 +848,22 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     }
     return ids;
   }, [profile.claims, profile.jobLoaded, isJobMatch]);
+
+  // Expansion state. When a job loads, all matched claims auto-expand; the
+  // user can still manually open/close any card on top of that.
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(
+    () => new Set(jobMatchedIds),
+  );
+
+  React.useEffect(() => {
+    setExpandedIds(new Set(jobMatchedIds));
+  }, [jobMatchedIds]);
+
+  const { claims, sections, height: boardHeight } = React.useMemo(
+    () => autoLayout(arrangedClaims, expandedIds),
+    [arrangedClaims, expandedIds],
+  );
+
   // Filters: when a job is loaded, the rearrangement IS the signal — don't
   // also dim. Filter chips remain interactive for manual refinement.
   const [activeFilters, setActiveFilters] = React.useState<Set<string>>(
@@ -860,8 +874,6 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     // Reset manual filters whenever job context flips.
     setActiveFilters(new Set());
   }, [profile.jobLoaded]);
-
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   const toggleFilter = React.useCallback((id: string) => {
     setActiveFilters((prev) => {
@@ -877,12 +889,17 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
   }, []);
 
   const toggleClaim = React.useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setExpandedId(null);
+      if (e.key === "Escape") setExpandedIds(new Set());
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -902,7 +919,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
       {sparse ? (
         <SparseList
           claims={claims}
-          expandedId={expandedId}
+          expandedIds={expandedIds}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
@@ -912,7 +929,7 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
           claims={claims}
           sections={sections}
           boardHeight={boardHeight}
-          expandedId={expandedId}
+          expandedIds={expandedIds}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
           filterLabelById={filterLabelById}
