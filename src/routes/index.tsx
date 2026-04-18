@@ -832,78 +832,110 @@ function WedgePage() {
           </Section>
 
           {/* Outreach Draft */}
-          <Section header={`${emailNum} / Outreach Draft`}>
-            {hideJobDriven ? (
-              <p className="text-[14px] text-muted-fg">
-                Couldn't read the job post. Check the URL?
-              </p>
-            ) : emailError ? (
-              <ErrorLine onRetry={regenerateEmail} />
-            ) : emailLoading || !email ? (
-              <SkeletonRows />
-            ) : (
-              <div>
-                <div className="flex flex-wrap items-baseline gap-x-3">
-                  <span className="label-mono">Subject:</span>
-                  <span className="text-[16px] text-foreground">{email.subject}</span>
+          <div ref={outreachRef}>
+            <Section header={`${emailNum} / Outreach Draft`}>
+              {hideJobDriven ? (
+                <p className="text-[14px] text-muted-fg">
+                  Couldn't read the job post. Check the URL?
+                </p>
+              ) : !selectedIdea && !email ? (
+                <p className="text-[15px] text-tertiary-fg">
+                  Pick an artifact above and the outreach drafts here.
+                </p>
+              ) : emailError ? (
+                <ErrorLine onRetry={regenerateEmail} />
+              ) : !email ? (
+                <SkeletonRows />
+              ) : (
+                <div className="relative">
+                  {emailLoading && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-end bg-background/60 pt-2 backdrop-blur-[1px]">
+                      <span className="mono text-[11px] uppercase tracking-wider text-muted-fg">
+                        {emailStage === "rewriting"
+                          ? "Rewriting..."
+                          : emailStage === "checking"
+                            ? "Verifying voice..."
+                            : "Working..."}
+                      </span>
+                    </div>
+                  )}
+                  <div className={emailLoading ? "opacity-60" : undefined}>
+                    <div className="flex flex-wrap items-baseline gap-x-3">
+                      <span className="label-mono">Subject:</span>
+                      <span className="text-[16px] text-foreground">
+                        {email.subject}
+                      </span>
+                    </div>
+                    <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
+                      {email.body}
+                    </pre>
+                    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <button
+                        type="button"
+                        onClick={copyEmail}
+                        className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
+                      >
+                        {copied ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={copySubject}
+                        className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
+                      >
+                        {copiedSubject ? "Copied subject" : "Copy subject"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={regenerateEmail}
+                        disabled={emailLoading}
+                        className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
+                      >
+                        {emailLoading
+                          ? emailStage === "rewriting"
+                            ? "Rewriting..."
+                            : emailStage === "checking"
+                              ? "Verifying voice..."
+                              : "Working..."
+                          : "Regenerate"}
+                      </button>
+                      <span className="mono text-[13px] text-tertiary-fg select-none">·</span>
+                      <button
+                        type="button"
+                        onClick={() => setMode(voiceMode === "blunter" ? "default" : "blunter")}
+                        disabled={emailLoading}
+                        className={[
+                          "mono text-[13px] uppercase tracking-wider transition-colors disabled:opacity-40",
+                          voiceMode === "blunter"
+                            ? "text-accent underline underline-offset-4"
+                            : "text-tertiary-fg hover:text-foreground",
+                        ].join(" ")}
+                      >
+                        Blunter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMode(voiceMode === "warmer" ? "default" : "warmer")}
+                        disabled={emailLoading}
+                        className={[
+                          "mono text-[13px] uppercase tracking-wider transition-colors disabled:opacity-40",
+                          voiceMode === "warmer"
+                            ? "text-accent underline underline-offset-4"
+                            : "text-tertiary-fg hover:text-foreground",
+                        ].join(" ")}
+                      >
+                        Warmer
+                      </button>
+                    </div>
+                    {slopHint && (
+                      <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
+                        {slopHint}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <pre className="mono mt-6 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
-                  {email.body}
-                </pre>
-                <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <button
-                    type="button"
-                    onClick={copyEmail}
-                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80"
-                  >
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copySubject}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground"
-                  >
-                    {copiedSubject ? "Copied subject" : "Copy subject"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateEmail}
-                    disabled={emailLoading}
-                    className="mono text-[13px] font-medium uppercase tracking-wider text-accent transition-opacity hover:opacity-80 disabled:opacity-40"
-                  >
-                    {emailLoading
-                      ? emailStage === "rewriting"
-                        ? "Rewriting..."
-                        : emailStage === "checking"
-                          ? "Verifying voice..."
-                          : "Working..."
-                      : "Regenerate"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateBlunter}
-                    disabled={emailLoading}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    Blunter
-                  </button>
-                  <button
-                    type="button"
-                    onClick={regenerateWarmer}
-                    disabled={emailLoading}
-                    className="mono text-[13px] uppercase tracking-wider text-tertiary-fg transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    Warmer
-                  </button>
-                </div>
-                {slopHint && (
-                  <p className="mono mt-3 text-[11px] uppercase tracking-wider text-tertiary-fg">
-                    {slopHint}
-                  </p>
-                )}
-              </div>
-            )}
-          </Section>
+              )}
+            </Section>
+          </div>
         </div>
       )}
     </main>
