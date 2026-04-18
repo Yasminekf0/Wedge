@@ -2,45 +2,64 @@
 
 ## Goal
 
-Make `/proof-graph` the landing page (currently at `/`), and move the outreach workflow to its own route. Drop the GitHub username and pitch inputs from the outreach form — derive Sasha's GitHub handle from the proof graph's example profile instead.
+Stop calling GitHub for Sasha. Replace every use of the live `CandidateProof` with a hardcoded summary derived from `exampleProfile` (the proof graph data), so the LLM "knows the candidate" from the proof graph, not from GitHub API output.
 
-## Routing change
+## What feeds off candidate GitHub today (in `src/routes/outreach.tsx`)
 
-- `/` → renders the proof graph (what's currently at `/proof-graph`)
-- `/outreach` → renders the outreach workflow (what's currently at `/`)
-- `/proof-graph` → remove this route file (consolidated into `/`)
+1. `fetchCandidateProof(SASHA_GH)` → sets `proof`, `proofState`. Used in:
+   - `summariseCandidate(p)` → injected into the ideas prompt and the email prompt as `=== CANDIDATE GITHUB ===`.
+   - `candidateName = p?.user?.login` → sign-off name in the email payload.
+   - `proofState` UI ("loading / missing / ready") — but there's no longer a Section that renders this (proof section now embeds the proof-graph). Dead state.
+2. `getRateLimitRemaining()` post-fetch — only meaningful for the candidate fetch + company fetch; we keep it for company.
 
-Implementation: swap the contents of `src/routes/index.tsx` and `src/routes/proof-graph.tsx`, then delete the proof-graph route. The TanStack Router plugin will regenerate `routeTree.gen.ts` on the next build.
+## Plan
 
-## Entry point on `/` (proof graph)
+### 1. New helper: `candidateSummaryFromProfile()`
 
-Add a single CTA on the proof graph page that links to `/outreach`:
-- Place it near the existing demo toggle (bottom-right) OR as a small button in the header area of the proof graph.
-- Label: `Draft outreach for a job` (or similar).
-- Uses `<Link to="/outreach">`.
+Add a small pure function (top of `outreach.tsx`, or a new `src/lib/candidateFromProfile.ts` — prefer the lib file to keep the route lean) that takes `exampleProfile` and produces a plain-text block in roughly the same shape `summariseCandidate` produces today:
 
-Decision: put it next to the existing "simulate job match" toggle in the bottom-right corner so it doesn't disturb the proof graph layout. Same visual style as that toggle.
+```
+Name: Sasha Lindqvist
+Location: Stockholm, Sweden
+Bio: Backend engineer. Distributed systems, Rust, infrastructure.
 
-## Outreach page (`/outreach`)
+Top claims:
+- [Work] Senior Backend Engineer, Klarna — Led the payments infra rewrite, cut p99 latency by 60%. (Rust, Tokio, Postgres, Kafka, gRPC)
+- [Project] kvraft — distributed key-value store in Rust to learn Raft. (Rust, Tokio, RocksDB) — github.com/...
+- [Achievement] Won the Rust Foundation Community Grant for OSS work.
+- ...etc
+```
 
-Move all current `src/routes/index.tsx` content here. Two changes inside it:
+Build it from `exampleProfile.claims`: include section, headline `text`, optional `subtext`, `details.stack` (joined), and the first repo/deploy `evidence.url` if present. Cap at ~10 claims.
 
-1. **Remove the GitHub username input field.** Hardcode the handle by importing it from the example profile — read `exampleProfile.header.github` (or fall back to a constant if that field isn't a clean handle) and pass it to `fetchCandidateProof`. No user-facing field.
+This block is what we pass to the LLM as `candidateSummary` — same field name, same prompt slot, no Claude prompt changes.
 
-2. **Remove the "Your 1-line pitch" input field** and the helper text below it. Pass `pitch: ""` to the email generation call (the existing prompt already handles empty pitch by skipping the self-intro line).
+### 2. Strip GitHub fetching for the candidate
 
-Everything else stays identical: job URL input, target name input, Generate button, Research section, Proof graph view, 3 ideas, outreach draft, blunter/warmer, regenerate, copy buttons, slop filter, prompts. No prompt changes. No proof graph changes beyond the new CTA link.
+In `outreach.tsx`:
+- Remove `SASHA_GH`, `fetchCandidateProof`, `CandidateProof` import, `proof` / `proofState` state, the `proofP` promise, and the `setProof*` calls.
+- In `handleGenerate`, drop `proofP` from the `Promise.all`. Pass `null` (or a lightweight stub object — see below) wherever `proof` was passed.
+- Replace the `summariseCandidate(p)` call sites with a single module-level constant: `const CANDIDATE_SUMMARY = candidateSummaryFromProfile(exampleProfile);` and use that.
+- For `candidateName`, hardcode from `exampleProfile.header.name.split(" ")[0]` (i.e. "Sasha").
+- Delete `summariseCandidate` (no longer used).
+- `runIdeasAndEmail` and `generateEmail` signatures: drop the `p: CandidateProof | null` parameter. Update internal references and the call sites (`regenerateIdeas`, `selectIdea`, `regenerateEmail`, `setMode`, `rerunWithHandle`).
 
-## Files touched
+### 3. UI cleanup
 
-- `src/routes/index.tsx` — replace with the proof graph page content + add `Link to="/outreach"` CTA.
-- `src/routes/outreach.tsx` — new file, contains the current index.tsx content with the two input fields removed and Sasha's GitHub handle hardcoded.
-- `src/routes/proof-graph.tsx` — delete.
+- The proof-graph section already renders the proof graph preview from `exampleProfile`, independent of any fetch. No UI change needed there.
+- Remove the now-dead `proofState`-driven branches if any exist (skim and delete).
+- Loading copy that referenced "pulling your proof graph" stays accurate (the proof graph is the source).
+
+### 4. Files touched
+
+- `src/routes/outreach.tsx` — the bulk of the change.
+- `src/lib/candidateFromProfile.ts` — new, ~30 lines.
+- No changes to `claude.functions.ts`, `github.ts`, `proof-graph/*`, prompts, or routes.
 
 ## Verification
 
-- Visiting `/` shows the proof graph.
-- Clicking the new CTA navigates to `/outreach` and shows the trimmed outreach form (only Job URL + Target name).
-- Generating an email still fetches Sasha's GitHub data correctly and produces a draft with no self-intro line.
-- Old `/proof-graph` URL 404s (acceptable since this is an internal tool, but note it).
+- Network tab on `/outreach` Generate: no `api.github.com/users/...` or `/repos/...` calls for Sasha. Only the company-org calls remain.
+- Generated email body still references Sasha's specific work (Klarna rewrite, kvraft, Rust grant, etc.) because those claims are now in the candidate summary the LLM sees.
+- Sign-off line still ends with "Thanks, Sasha".
+- Removing the `GITHUB_TOKEN` would not break candidate flow (only affects company resolution, unchanged).
 
