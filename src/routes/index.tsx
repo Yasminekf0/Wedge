@@ -232,7 +232,7 @@ function WedgePage() {
   return (
     <main className="mx-auto w-full max-w-[720px] px-6 pt-24 pb-32">
       {/* Wordmark */}
-      <div className="mono text-[28px] font-medium tracking-wide text-foreground">wedge</div>
+      <div className="mono text-[28px] font-medium tracking-wide text-muted-fg">wedge</div>
 
       <p className="mt-10 text-[20px] leading-snug text-foreground">
         Cold outreach that references something you actually built for them.
