@@ -22,6 +22,7 @@ import {
 import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
+import { validateCitations } from "@/lib/validation";
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
@@ -94,6 +95,10 @@ function WedgePage() {
   const [loading, setLoading] = React.useState(false);
   const [longLoading, setLongLoading] = React.useState(false);
   const [hasResults, setHasResults] = React.useState(false);
+  const [ideasStage, setIdeasStage] = React.useState<
+    "idle" | "verifying" | "regenerating"
+  >("idle");
+  const [shortIdeasNote, setShortIdeasNote] = React.useState<string | null>(null);
 
   // Resolution state
   const [resolveStage, setResolveStage] = React.useState<ResolveStage>("idle");
@@ -173,6 +178,14 @@ function WedgePage() {
     h: HNSignal | null,
   ) {
     let firstIdea: ArtifactIdea | null = null;
+    setShortIdeasNote(null);
+    const sources = {
+      companySignal: c,
+      blogSignal: b,
+      hnSignal: h,
+      jobPostMarkdown: jobMarkdown,
+      candidateProfile: p,
+    };
     try {
       const res = await callClaudeFn({
         data: {
@@ -184,13 +197,62 @@ function WedgePage() {
           candidateSummary: summariseCandidate(p),
         },
       });
+      let validated: ArtifactIdea[] = [];
       if (res.mode === "ideas") {
-        setIdeas(res.ideas);
-        firstIdea = res.ideas[0] ?? null;
+        setIdeasStage("verifying");
+        validated = validateCitations(res.ideas, sources);
+      }
+
+      // Regenerate once if validation left fewer than 3 ideas.
+      if (validated.length < 3) {
+        setIdeasStage("regenerating");
+        const need = 3 - validated.length;
+        try {
+          const res2 = await callClaudeFn({
+            data: {
+              mode: "ideas",
+              jobMarkdown,
+              companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+              blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
+              hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
+              candidateSummary: summariseCandidate(p),
+              extraUserInstruction: `Your previous response contained ideas with fabricated or unverifiable citations, which have been dropped. Generate ${need} more ideas, grounded only in the sources provided. Do not invent citations.`,
+            },
+          });
+          if (res2.mode === "ideas") {
+            const more = validateCitations(res2.ideas, sources);
+            // Merge by title to avoid duplicates from the same idea pool.
+            const seen = new Set(validated.map((i) => i.title.toLowerCase()));
+            for (const m of more) {
+              if (!seen.has(m.title.toLowerCase())) {
+                validated.push(m);
+                seen.add(m.title.toLowerCase());
+              }
+              if (validated.length >= 3) break;
+            }
+          }
+        } catch (e) {
+          console.error("regeneration failed", e);
+        }
+      }
+
+      validated = validated.slice(0, 3);
+      setIdeas(validated);
+      if (validated.length > 0 && validated.length < 3) {
+        setShortIdeasNote(
+          `Only ${validated.length} idea${validated.length === 1 ? "" : "s"} with verifiable citations this run. Regenerate to try again.`,
+        );
+      }
+      if (validated.length === 0) {
+        setIdeasError(true);
+      } else {
+        firstIdea = validated[0];
       }
     } catch (e) {
       console.error(e);
       setIdeasError(true);
+    } finally {
+      setIdeasStage("idle");
     }
 
     if (firstIdea) {
@@ -436,21 +498,9 @@ function WedgePage() {
 
   async function regenerateIdeas() {
     setIdeasError(false);
-    try {
-      const res = await callClaudeFn({
-        data: {
-          mode: "ideas",
-          jobMarkdown: jobMd,
-          companySignalJson: company ? JSON.stringify(company, null, 2) : "",
-          blogSignalJson: blog ? JSON.stringify(blog, null, 2) : "",
-          hnSignalJson: hn ? JSON.stringify(hn, null, 2) : "",
-          candidateSummary: summariseCandidate(proof),
-        },
-      });
-      if (res.mode === "ideas") setIdeas(res.ideas);
-    } catch {
-      setIdeasError(true);
-    }
+    setIdeas(null);
+    setShortIdeasNote(null);
+    await runIdeasAndEmail(jobMd, company, proof, blog, hn);
   }
 
   async function regenerateEmail() {
@@ -546,7 +596,15 @@ function WedgePage() {
           disabled={loading}
           className="mt-2 mono h-11 w-full rounded-md bg-accent text-[13px] font-medium tracking-wider uppercase text-accent-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? (longLoading ? "Still working..." : "Working...") : "Generate"}
+          {loading
+            ? ideasStage === "regenerating"
+              ? "Regenerating grounded ideas..."
+              : ideasStage === "verifying"
+                ? "Verifying sources..."
+                : longLoading
+                  ? "Still working..."
+                  : "Working..."
+            : "Generate"}
         </button>
       </div>
 
@@ -638,6 +696,11 @@ function WedgePage() {
                 {ideas.map((idea, i) => (
                   <IdeaBlock key={i} index={i + 1} idea={idea} />
                 ))}
+                {shortIdeasNote && (
+                  <p className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
+                    {shortIdeasNote}
+                  </p>
+                )}
               </div>
             )}
           </Section>

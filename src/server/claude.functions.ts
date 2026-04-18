@@ -13,12 +13,35 @@ export type ArtifactPattern =
   | "missing_piece"
   | "steelman";
 
+export type CitationSource =
+  | "job_post"
+  | "company_github"
+  | "company_blog"
+  | "hn"
+  | "candidate_github";
+
+export interface Citation {
+  source: CitationSource;
+  // Exactly one set of ref fields populated, depending on `source`:
+  repo_name?: string; // company_github
+  release_tag?: string; // company_github (optional, pairs with repo_name)
+  post_title?: string; // company_blog
+  post_url?: string; // company_blog
+  hn_thread_title?: string; // hn
+  hn_thread_url?: string; // hn
+  job_post_quote?: string; // job_post (≤140 chars verbatim)
+  candidate_repo?: string; // candidate_github
+  /** Why this specific source drove this specific idea. One sentence. */
+  relevance: string;
+}
+
 export interface ArtifactIdea {
   title: string;
   pattern: ArtifactPattern;
   why_it_lands: string;
   estimated_hours: number;
   what_to_build: string;
+  citations: Citation[];
 }
 
 export interface IdeasResult {
@@ -41,6 +64,8 @@ interface CallInput {
   candidateSummary?: string; // "" if none
   // For email mode:
   ideaJson?: string;
+  // For ideas mode regeneration: extra instruction appended to user message.
+  extraUserInstruction?: string;
 }
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -58,11 +83,11 @@ You will receive up to five sources of context:
 4. Hacker News threads about the company (rarely present, but when present these have been pre-filtered for quality — treat them as high-signal)
 5. The candidate's GitHub profile (always present)
 
-Your job: propose exactly 3 artifact ideas. Each idea must:
+Your job: propose up to 3 artifact ideas. Each idea must:
 - Reference something specific from sources 1–4 (cite it in why_it_lands)
 - Be plausibly achievable by the candidate given their skills from source 5
 - Take 2–8 hours
-- Fall into one of these patterns: teardown, contribution, extension, response, bridge, benchmark, translation, missing piece, steelman
+- Fall into one of these patterns: teardown, contribution, extension, response, bridge, benchmark, translation, missing_piece, steelman
 
 The BEST ideas bridge two sources — e.g. "you said X in the job post, your repo Y does Z, here's an artifact connecting them."
 
@@ -74,6 +99,23 @@ Source weighting:
 
 Avoid generic ideas (e.g. "write a blog post about their product"). Specificity is the entire point.
 
+CITATIONS — read carefully, this is the most important rule:
+
+Every idea you generate MUST be grounded in specific content from the sources provided. Generic ideas are not acceptable.
+
+For each idea, include 1-3 citations that point to the exact things you used:
+- If you're referencing a company repo, cite it by full name (e.g. "stripe/smokescreen") and if a release drove the idea, include the release tag.
+- If you're referencing a blog post, cite its title AND url — copy them verbatim from the provided blog signal. Do not paraphrase titles.
+- If you're referencing an HN thread, cite its title AND url verbatim.
+- If you're referencing the job post, quote the specific sentence or phrase (≤140 chars, verbatim from the job post).
+- If you're referencing the candidate's skills, cite the specific repo of theirs that demonstrates the skill.
+
+For each citation, the "relevance" field must explain in one sentence WHY that specific source drove this specific idea. Not "this is relevant to the company" — that's useless. Something like "their Jan 2024 postmortem explicitly called out observability in gRPC as an open problem, which this artifact addresses."
+
+CRITICAL: Do not fabricate citations. If you cannot find a specific, real item in the sources to cite, do not invent one. It is better to generate fewer ideas with real citations than three ideas with made-up references. If you genuinely cannot ground an idea in the provided sources, omit it — return only the ideas you can cite.
+
+"bridge" pattern ideas MUST have at least 2 citations from different sources (that's what makes them bridges).
+
 Return only valid JSON, no preamble, no markdown code fences:
 {
   "ideas": [
@@ -82,7 +124,21 @@ Return only valid JSON, no preamble, no markdown code fences:
       "pattern": "one of: teardown | contribution | extension | response | bridge | benchmark | translation | missing_piece | steelman",
       "why_it_lands": "one sentence citing the specific thing from the job post, repos, blog, or HN that makes this land",
       "estimated_hours": integer 2-8,
-      "what_to_build": "2-3 sentences of concrete scope. What exactly do they build? What does 'done' look like?"
+      "what_to_build": "2-3 sentences of concrete scope. What exactly do they build? What does 'done' look like?",
+      "citations": [
+        {
+          "source": "job_post | company_github | company_blog | hn | candidate_github",
+          "repo_name": "owner/repo (only for company_github)",
+          "release_tag": "v1.2.3 (optional, only for company_github)",
+          "post_title": "verbatim title (only for company_blog)",
+          "post_url": "verbatim url (only for company_blog)",
+          "hn_thread_title": "verbatim title (only for hn)",
+          "hn_thread_url": "verbatim url (only for hn)",
+          "job_post_quote": "verbatim ≤140 char quote (only for job_post)",
+          "candidate_repo": "repo name (only for candidate_github)",
+          "relevance": "one sentence on why this source drove this idea"
+        }
+      ]
     }
   ]
 }`;
@@ -92,7 +148,7 @@ const EMAIL_SYSTEM = `You are drafting a cold outreach email for a developer app
 Rules:
 - Subject line: max 8 words, no exclamation marks, no "quick question", no "re:", no "introducing"
 - Body: 110–140 words, 3 short paragraphs
-- Paragraph 1: reference one specific thing from the job post OR the company's recent GitHub activity. Not generic. Cite a repo name, a release, a line from the job post, or a specific technical choice. Never say "I'm impressed by your work" or "I've been following your company."
+- Paragraph 1: reference one specific thing from the job post OR the company's recent GitHub activity. Not generic. Cite a repo name, a release, a line from the job post, or a specific technical choice. Never say "I'm impressed by your work" or "I've been following your company." If the chosen artifact idea cites a specific blog post, release, or HN thread, reference that specific item by name in this paragraph. Example: "I read your postmortem on the Jan 2024 Postgres incident" is dramatically better than "I read your engineering blog."
 - Paragraph 2: describe the artifact the candidate is building. Frame it as "I'm putting together X because Y" where Y references paragraph 1. Present tense, not "I would build" — it's being made.
 - Paragraph 3: link to the proof graph (use the literal placeholder {proof-graph-url}), offer a short call, sign off. No "looking forward to hearing from you." No "best regards."
 
@@ -110,6 +166,7 @@ function ideasUser(input: CallInput) {
   const blog = (input.blogSignalJson || "").slice(0, 6000);
   const hn = (input.hnSignalJson || "").slice(0, 6000);
   const candidate = (input.candidateSummary || "").slice(0, 4000);
+  const extra = (input.extraUserInstruction || "").slice(0, 1500);
   return `=== JOB POST ===
 ${job || "(none provided)"}
 
@@ -123,7 +180,7 @@ ${blog || "No blog signal available"}
 ${hn || "No HN signal available"}
 
 === CANDIDATE GITHUB ===
-${candidate || "(none provided)"}`;
+${candidate || "(none provided)"}${extra ? `\n\n=== ADDITIONAL INSTRUCTION ===\n${extra}` : ""}`;
 }
 
 function emailUser(input: CallInput) {
@@ -227,7 +284,7 @@ export const callClaude = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1500,
+        max_tokens: data.mode === "ideas" ? 3000 : 1500,
         system,
         messages: [{ role: "user", content: user }],
       }),
