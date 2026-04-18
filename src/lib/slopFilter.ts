@@ -52,7 +52,6 @@ const BANNED_WORDS: string[] = [
   "thrilled",
   "eager",
   "enthusiastic",
-  "reach out",
   "touch base",
   "circle back",
   "ecosystem",
