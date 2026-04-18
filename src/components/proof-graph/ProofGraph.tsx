@@ -12,22 +12,40 @@ import type {
 // Constants — board layout
 // ---------------------------------------------------------------------------
 
-const BOARD_W = 1400;
-const BOARD_H = 1240;
+// Compact, structured grid. Three sections stacked vertically, each laid out
+// on a shared 4-column track. Cards span 1 or 2 columns based on size.
+const COLS = 4;
+const COL_W = 260;
+const COL_GAP = 20;
+const ROW_GAP = 16;
+const PAD_X = 120; // leaves room for section labels on the left
+const PAD_TOP = 24;
+const SECTION_GAP = 56;
+const SECTION_HEADER_H = 36;
 
-const SECTION_ZONES: Record<
-  ClaimSection,
-  { label: string; labelX: number; labelY: number }
-> = {
-  projects: { label: "Projects", labelX: 40, labelY: 28 },
-  work: { label: "Work", labelX: 40, labelY: 600 },
-  education: { label: "Education", labelX: 40, labelY: 900 },
+const BOARD_W = PAD_X + COLS * COL_W + (COLS - 1) * COL_GAP + 60;
+
+const SIZE_TO_SPAN: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 1,
+  md: 1,
+  lg: 2,
 };
 
-const SIZE_TO_WIDTH: Record<NonNullable<Claim["size"]>, number> = {
-  sm: 220,
-  md: 290,
-  lg: 360,
+const SIZE_TO_HEIGHT: Record<NonNullable<Claim["size"]>, number> = {
+  sm: 110,
+  md: 130,
+  lg: 130,
+};
+
+function spanWidth(span: number): number {
+  return span * COL_W + (span - 1) * COL_GAP;
+}
+
+const SECTION_ORDER: ClaimSection[] = ["projects", "work", "education"];
+const SECTION_LABEL: Record<ClaimSection, string> = {
+  projects: "Projects",
+  work: "Work",
+  education: "Education",
 };
 
 // ---------------------------------------------------------------------------
