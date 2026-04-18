@@ -30,7 +30,7 @@ export const exampleProfile: ProofProfile = {
     { id: "go", label: "Go" },
     { id: "awards", label: "Awards" },
   ],
-  jobActiveFilterIds: ["rust", "distributed", "production"],
+  jobActiveFilterIds: ["rust", "distributed"],
   claims: [
     {
       id: "c1",
