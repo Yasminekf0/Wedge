@@ -790,28 +790,61 @@ function SparseList({
 // ---------------------------------------------------------------------------
 
 export function ProofGraph({ profile }: { profile: ProofProfile }) {
-  const { claims, sections, height: boardHeight } = React.useMemo(
-    () => autoLayout(profile.claims),
-    [profile.claims],
-  );
   const filterLabelById = React.useMemo(
     () => new Map(profile.filters.map((f) => [f.id, f.label])),
     [profile.filters],
   );
 
-  const initialActive = React.useMemo(() => {
-    if (profile.jobLoaded && profile.jobActiveFilterIds?.length) {
-      return new Set(profile.jobActiveFilterIds);
-    }
-    return new Set<string>();
-  }, [profile.jobLoaded, profile.jobActiveFilterIds]);
+  const jobFilterIds = React.useMemo(
+    () => new Set(profile.jobActiveFilterIds ?? []),
+    [profile.jobActiveFilterIds],
+  );
 
-  const [activeFilters, setActiveFilters] =
-    React.useState<Set<string>>(initialActive);
+  // Restrictive job match: a claim must carry EVERY job filter tag.
+  const isJobMatch = React.useCallback(
+    (c: Claim) => {
+      if (!profile.jobLoaded || jobFilterIds.size === 0) return false;
+      for (const t of jobFilterIds) {
+        if (!c.tags.includes(t)) return false;
+      }
+      return true;
+    },
+    [profile.jobLoaded, jobFilterIds],
+  );
+
+  // When a job is loaded, rearrange the board: matched claims get promoted
+  // (size lg, listed first inside their section) and unmatched claims get
+  // demoted (size sm, listed last). Layout flows them so matches naturally
+  // occupy the top-left / center, unmatched ones drift to the edges.
+  const arrangedClaims = React.useMemo(() => {
+    if (!profile.jobLoaded) return profile.claims;
+    const matched: Claim[] = [];
+    const rest: Claim[] = [];
+    for (const c of profile.claims) {
+      if (isJobMatch(c)) {
+        matched.push({ ...c, size: "lg" });
+      } else {
+        rest.push({ ...c, size: "sm" });
+      }
+    }
+    return [...matched, ...rest];
+  }, [profile.claims, profile.jobLoaded, isJobMatch]);
+
+  const { claims, sections, height: boardHeight } = React.useMemo(
+    () => autoLayout(arrangedClaims),
+    [arrangedClaims],
+  );
+
+  // Filters: when a job is loaded, the rearrangement IS the signal — don't
+  // also dim. Filter chips remain interactive for manual refinement.
+  const [activeFilters, setActiveFilters] = React.useState<Set<string>>(
+    new Set(),
+  );
 
   React.useEffect(() => {
-    setActiveFilters(initialActive);
-  }, [initialActive]);
+    // Reset manual filters whenever job context flips.
+    setActiveFilters(new Set());
+  }, [profile.jobLoaded]);
 
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
