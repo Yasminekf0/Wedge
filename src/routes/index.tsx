@@ -498,21 +498,9 @@ function WedgePage() {
 
   async function regenerateIdeas() {
     setIdeasError(false);
-    try {
-      const res = await callClaudeFn({
-        data: {
-          mode: "ideas",
-          jobMarkdown: jobMd,
-          companySignalJson: company ? JSON.stringify(company, null, 2) : "",
-          blogSignalJson: blog ? JSON.stringify(blog, null, 2) : "",
-          hnSignalJson: hn ? JSON.stringify(hn, null, 2) : "",
-          candidateSummary: summariseCandidate(proof),
-        },
-      });
-      if (res.mode === "ideas") setIdeas(res.ideas);
-    } catch {
-      setIdeasError(true);
-    }
+    setIdeas(null);
+    setShortIdeasNote(null);
+    await runIdeasAndEmail(jobMd, company, proof, blog, hn);
   }
 
   async function regenerateEmail() {
