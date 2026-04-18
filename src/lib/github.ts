@@ -1,31 +1,32 @@
-// GitHub REST API wrapper with rate-limit awareness.
-// Unauthenticated: 60 req/hour per IP. We track x-ratelimit-remaining
-// across calls and surface it via getRateLimitState().
+// GitHub REST API wrapper. Calls go through a server-side proxy so the
+// GITHUB_TOKEN runtime secret is never exposed to the browser.
+import { githubProxy } from "@/server/github.functions";
 
 let lastRemaining: number | null = null;
-
-function recordRateLimit(res: Response) {
-  const h = res.headers.get("x-ratelimit-remaining");
-  if (h !== null) {
-    const n = Number(h);
-    if (!Number.isNaN(n)) lastRemaining = n;
-  }
-}
 
 export function getRateLimitRemaining(): number | null {
   return lastRemaining;
 }
 
-const GH_TOKEN = (import.meta.env.VITE_GITHUB_TOKEN as string | undefined)?.trim();
+interface FauxResponse {
+  status: number;
+  ok: boolean;
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+}
 
-async function ghFetch(path: string): Promise<Response> {
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
+async function ghFetch(path: string): Promise<FauxResponse> {
+  const r = await githubProxy({ data: { path } });
+  if (r.rateLimitRemaining !== null) {
+    const n = Number(r.rateLimitRemaining);
+    if (!Number.isNaN(n)) lastRemaining = n;
+  }
+  return {
+    status: r.status,
+    ok: r.ok,
+    json: async () => JSON.parse(r.body),
+    text: async () => r.body,
   };
-  if (GH_TOKEN) headers.Authorization = `Bearer ${GH_TOKEN}`;
-  const res = await fetch(`https://api.github.com${path}`, { headers });
-  recordRateLimit(res);
-  return res;
 }
 
 // ---------- types ----------
