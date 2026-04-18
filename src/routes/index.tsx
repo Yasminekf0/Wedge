@@ -27,14 +27,8 @@ function ProofGraphPage() {
   return (
     <div className="relative">
       <ProofGraph profile={profile} />
-      {/* Demo controls, bottom-right */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
-        <Link
-          to="/outreach"
-          className="mono rounded-md border border-border bg-accent/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-accent-fg backdrop-blur transition-opacity hover:opacity-90"
-        >
-          Draft outreach for a job
-        </Link>
+      {/* Demo control, bottom-right */}
+      <div className="fixed bottom-4 right-4 z-50">
         <button
           type="button"
           onClick={() => setJobLoaded((v) => !v)}
