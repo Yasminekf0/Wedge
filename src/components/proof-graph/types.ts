@@ -2,7 +2,7 @@
 // A claim is a declarative statement the candidate is making about themselves.
 // Evidence backs it up. The board is a corkboard of claims.
 
-export type ClaimSection = "projects" | "education" | "work";
+export type ClaimSection = "projects" | "achievements" | "education" | "work";
 
 export type EvidenceType = "repo" | "deploy" | "work" | "education" | "link";
 
