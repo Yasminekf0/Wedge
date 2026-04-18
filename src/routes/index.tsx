@@ -22,6 +22,7 @@ import {
 import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
+import { validateCitations } from "@/lib/validation";
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
@@ -94,6 +95,10 @@ function WedgePage() {
   const [loading, setLoading] = React.useState(false);
   const [longLoading, setLongLoading] = React.useState(false);
   const [hasResults, setHasResults] = React.useState(false);
+  const [ideasStage, setIdeasStage] = React.useState<
+    "idle" | "verifying" | "regenerating"
+  >("idle");
+  const [shortIdeasNote, setShortIdeasNote] = React.useState<string | null>(null);
 
   // Resolution state
   const [resolveStage, setResolveStage] = React.useState<ResolveStage>("idle");
