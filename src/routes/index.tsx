@@ -27,27 +27,32 @@ import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilte
 
 // ---------- voice modes ----------
 
-const BLUNTER_INSTRUCTION = `Rewrite this as a single paragraph. 40-70 words total. No three-paragraph structure. No separate greeting or signoff line — it's one continuous block.
+const BLUNTER_INSTRUCTION = `Rewrite this as a single paragraph. 50-90 words total. No three-paragraph structure. No separate greeting or signoff line on its own — the greeting opens the paragraph, the signoff closes it. One continuous block.
 
-Keep exactly: (1) the specific reference from the citations, (2) what the candidate built/is building, (3) the proof graph link. Cut everything else. Cut hedges, cut pleasantries, cut setup sentences.
+Keep these beats in order, fused into one paragraph:
+1. "Hi {name}, I came across the {role} at {company} and wanted to reach out." (or "Hi there," if no target name)
+2. If a candidate pitch was provided, one quick clause using it (verbatim or near-verbatim, no corporate rewording). If no pitch, skip.
+3. One specific citation reference (post title, repo name, release tag, or exact job-post phrase) — by name, not generic.
+4. One clause on what you built or are building, tied to the citation.
+5. One clause introducing the proof graph in plain language before the URL. Do not drop the URL naked. Example: "instead of a CV, here's a page that links to the actual code behind every claim: {proof-graph-url}".
+6. One clause asking for a call if the role is still open. The ask must survive the compression — never cut it.
+7. End with "Thanks, {first name}" as the final clause/sentence.
 
-The email should feel like it was dashed off in 90 seconds. Short sentences. No adverbs. No em-dashes (still banned). No tidy closer. End on the concrete next step or the link, whichever is later.
+Short sentences. Zero adverbs. Zero em-dashes (still banned). No hedges, no filler, no tidy closer. It should feel like a fast email someone typed on their phone between meetings.
 
-Even in single-paragraph mode, the proof graph link must be introduced in plain terms before the URL. A one-clause intro is enough: "instead of a CV, here's the proof graph with code behind every claim: {proof-graph-url}". Do not drop the URL naked.
+Return the same JSON shape: { subject, body }. Body is one paragraph, no \\n\\n breaks.`;
 
-Still return the same JSON shape: { subject, body }. Body is one paragraph, no \\n\\n breaks.`;
-
-const WARMER_INSTRUCTION = `Rewrite this keeping the three-paragraph structure, but add a specific sentence expressing genuine interest in what the company is working on.
+const WARMER_INSTRUCTION = `Rewrite this keeping the FULL template structure (greeting, opening line naming role + company, optional self-intro from pitch, technical hook, artifact description, proof graph intro + link, explicit ask, "Thanks," + first name), but add ONE sentence of specific appreciation for what the company is working on.
 
 Rules for the appreciation sentence:
-- It goes in paragraph 1, after the specific citation reference.
-- It must name the thing the candidate finds interesting, specifically. Not "I love what you're doing" (meaningless). Something like "The direction you're taking with {specific thing from the citations or company signal} is one of the more interesting bets in {their actual space, named specifically}."
-- One sentence maximum. No gushing. No "I've been a huge fan". No "passionate", "excited", "thrilled" (all banned anyway).
-- The sentence must feel earned — it follows a specific observation, not replaces one.
+- Place it between the technical hook (step 4) and the artifact description (step 5).
+- It must name something specific the company is doing — cite a product direction, a technical bet, a recent launch, or something concrete from the company signal. Not "I love what you're doing" (meaningless). Something like: "The direction you're taking with {specific thing} is one of the more interesting bets in {specific space}, and it's part of why I wanted to reach out."
+- One sentence maximum. Specific, not gushing.
+- Cannot use any banned vocabulary (excited, passionate, thrilled, amazing, powerful, etc.). Warmth comes from specificity, not hype.
 
-The rest of the email stays peer-to-peer. Warmer does NOT mean sycophantic. It means: add one line that admits you actually care about their work, grounded in a specific thing.
+Keep everything else in the template. The opening line still states the role and intent to reach out. The explicit ask still closes the email. The proof graph intro still appears in plain language before the URL. 100-150 words in the body.
 
-Keep all other rules: no em-dashes, no banned vocabulary, no tidy closer, 90-140 words in body. Paragraph 3 still introduces the proof graph in plain terms before the URL.`;
+Return the same JSON shape: { subject, body }.`;
 
 function instructionForMode(mode: SlopMode): string | undefined {
   if (mode === "blunter") return BLUNTER_INSTRUCTION;
@@ -121,6 +126,7 @@ function WedgePage() {
   const [jobUrl, setJobUrl] = React.useState("");
   const [ghUser, setGhUser] = React.useState("");
   const [target, setTarget] = React.useState("");
+  const [pitch, setPitch] = React.useState("");
   const [urlError, setUrlError] = React.useState<string | null>(null);
 
   const [loading, setLoading] = React.useState(false);
@@ -196,15 +202,29 @@ function WedgePage() {
     setSlopHint(null);
     setEmailStage("drafting");
     const voiceInstruction = instructionForMode(mode);
+    const candidateName = p?.user?.login || "";
+    const baseData = {
+      mode: "email" as const,
+      jobMarkdown,
+      companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+      candidateSummary: summariseCandidate(p),
+      ideaJson: JSON.stringify(idea, null, 2),
+      companyName: companyName || c?.org?.name || "",
+      targetName: target.trim(),
+      candidatePitch: pitch.trim(),
+      candidateName,
+    };
+    // Best-effort role title for the slop filter — first ~6 words from job post H1.
+    const roleTitle =
+      jobMarkdown
+        .split("\n")
+        .map((l) => l.trim())
+        .find((l) => l.startsWith("# "))
+        ?.replace(/^#\s+/, "")
+        .split(/\s+/)
+        .slice(0, 6)
+        .join(" ") || "";
     try {
-      const baseData = {
-        mode: "email" as const,
-        jobMarkdown,
-        companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-        candidateSummary: summariseCandidate(p),
-        ideaJson: JSON.stringify(idea, null, 2),
-      };
-
       const res = await callClaudeFn({
         data: voiceInstruction
           ? { ...baseData, extraUserInstruction: voiceInstruction }
@@ -216,7 +236,11 @@ function WedgePage() {
 
       // Slop filter — one-shot correction loop.
       setEmailStage("checking");
-      const violations = detectSlop(draft, { mode });
+      const violations = detectSlop(draft, {
+        mode,
+        companyName: baseData.companyName,
+        roleTitle,
+      });
       if (violations.length > 0) {
         setEmailStage("rewriting");
         try {
@@ -231,7 +255,11 @@ function WedgePage() {
           });
           if (res2.mode === "email") {
             draft = { subject: res2.subject, body: res2.body };
-            const second = detectSlop(draft, { mode });
+            const second = detectSlop(draft, {
+              mode,
+              companyName: baseData.companyName,
+              roleTitle,
+            });
             if (second.length > 0) {
               setSlopHint(
                 "Draft may still read slightly generic — tap Regenerate or edit before sending.",
@@ -704,10 +732,17 @@ function WedgePage() {
           placeholder="torvalds"
         />
         <Field
-          label="Target (optional)"
+          label="Target name (optional)"
           value={target}
           onChange={setTarget}
           placeholder="VP Eng, hiring manager, etc."
+        />
+        <Field
+          label="Your 1-line pitch"
+          value={pitch}
+          onChange={setPitch}
+          placeholder="e.g. backend engineer, 6 years, distributed systems"
+          hint="Optional — skip if you'd rather the email not include a self-intro."
         />
 
         <button

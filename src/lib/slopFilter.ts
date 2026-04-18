@@ -10,7 +10,9 @@ export type SlopViolationType =
   | "banned_closing"
   | "em_dash"
   | "adverb_pileup"
-  | "length";
+  | "length"
+  | "missing_role_reference"
+  | "missing_explicit_ask";
 
 export interface SlopViolation {
   type: SlopViolationType;
@@ -52,7 +54,6 @@ const BANNED_WORDS: string[] = [
   "thrilled",
   "eager",
   "enthusiastic",
-  "reach out",
   "touch base",
   "circle back",
   "ecosystem",
@@ -137,9 +138,11 @@ export type SlopMode = "default" | "blunter" | "warmer";
 
 export function detectSlop(
   email: { subject: string; body: string },
-  opts: { mode?: SlopMode } = {},
+  opts: { mode?: SlopMode; companyName?: string | null; roleTitle?: string | null } = {},
 ): SlopViolation[] {
   const mode = opts.mode || "default";
+  const companyName = (opts.companyName || "").trim();
+  const roleTitle = (opts.roleTitle || "").trim();
   const violations: SlopViolation[] = [];
   const subject = email.subject || "";
   const body = email.body || "";
@@ -229,31 +232,31 @@ export function detectSlop(
   // 6. Length — bounds depend on the mode.
   const wc = countWords(body);
   if (mode === "blunter") {
-    if (wc < 30) {
+    if (wc < 40) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too short for blunter mode (${wc} words). Aim for 40-80 words in a single paragraph.`,
+        note: `Body is too short for blunter mode (${wc} words). Aim for 50-90 words in a single paragraph.`,
       });
-    } else if (wc > 90) {
+    } else if (wc > 100) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too long for blunter mode (${wc} words). Cut to 40-80 words. Single paragraph only.`,
+        note: `Body is too long for blunter mode (${wc} words). Cut to 50-90 words. Single paragraph only.`,
       });
     }
   } else {
-    if (wc < 80) {
+    if (wc < 90) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too short (${wc} words). Aim for 90-130 words, with a hard floor at 80.`,
+        note: `Body is too short (${wc} words). Aim for 100-150 words, with a hard floor at 90.`,
       });
-    } else if (wc > 140) {
+    } else if (wc > 160) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too long (${wc} words). Cut to 90-130 words by removing the weakest sentence.`,
+        note: `Body is too long (${wc} words). Cut to 100-150 words by removing the weakest sentence.`,
       });
     }
   }
@@ -271,6 +274,63 @@ export function detectSlop(
     });
   }
 
+  // 8. Opening line missing role reference. The opening must signal the
+  //    candidate is responding to a specific role at a specific company.
+  const bodyLower = body.toLowerCase();
+  const ROLE_PHRASES = [
+    "came across",
+    "saw the opening",
+    "saw your opening",
+    "reaching out about",
+    "wanted to reach out",
+    "reach out about",
+  ];
+  const hasRolePhrase = ROLE_PHRASES.some((p) => bodyLower.includes(p));
+  const hasCompanyName =
+    companyName.length > 0 && bodyLower.includes(companyName.toLowerCase());
+  const hasRoleTitle =
+    roleTitle.length > 2 && bodyLower.includes(roleTitle.toLowerCase());
+  if (!hasRolePhrase && !hasCompanyName && !hasRoleTitle) {
+    violations.push({
+      type: "missing_role_reference",
+      evidence: body.split(/[.!?]/)[0]?.trim().slice(0, 120) || "(opening)",
+      note: `The email must state early that you're writing in response to the specific role at the specific company. The opening should name the role or company, or use a phrase like "came across" or "wanted to reach out about".`,
+    });
+  }
+
+  // 9. Missing explicit ask. Email must invite a conversation tied to the role.
+  const ASK_PHRASES_STRICT = [
+    "call",
+    "chat",
+    "hop on",
+    "jump on",
+    "15 min",
+    "20 min",
+    "quick call",
+    "open to",
+    "available to",
+    "if the role",
+    "if you're still",
+  ];
+  const ASK_PHRASES_LOOSE = [
+    ...ASK_PHRASES_STRICT,
+    "free for",
+    "worth a",
+    "grab 15",
+    "grab 20",
+    "talk",
+  ];
+  const askSet = mode === "blunter" ? ASK_PHRASES_LOOSE : ASK_PHRASES_STRICT;
+  const hasAsk = askSet.some((p) => bodyLower.includes(p));
+  if (!hasAsk) {
+    const lastSentence = sentences[sentences.length - 1] || "(end of body)";
+    violations.push({
+      type: "missing_explicit_ask",
+      evidence: lastSentence.slice(0, 120),
+      note: `The email needs a clear invitation to a call or conversation, tied to whether the role is still open. Add a sentence like "Would love to hop on a quick call if the role is still open."`,
+    });
+  }
+
   return violations;
 }
 
@@ -283,9 +343,9 @@ export function slopRegenInstruction(
   const lines = violations.map((v) => `- ${v.note} (offending: "${v.evidence}")`);
   const structureReminder =
     mode === "blunter"
-      ? "Keep the structure (single tight paragraph, 40-80 words, proof graph link still introduced in plain language before the URL)"
+      ? "Keep the blunter structure (single paragraph, 50-90 words, opens with the greeting + role/company reference, closes with the ask and \"Thanks, {first name}\", proof graph link still introduced in plain language before the URL)"
       : mode === "warmer"
-        ? "Keep the structure (subject, three paragraphs, the specific appreciation sentence in paragraph 1, proof graph link with intro)"
-        : "Keep the structure (subject, three paragraphs)";
-  return `Your previous draft had these problems:\n\n${lines.join("\n")}\n\nRewrite the email fixing these specific issues. ${structureReminder}, keep the artifact reference, keep the proof graph link, keep the voice direct and specific. Do not add new AI-sounding language in the process of fixing the old one.\n\nReturn only valid JSON.`;
+        ? "Keep the warmer structure (full template with greeting, opening line naming the role and company, optional self-intro from the pitch, technical hook, the one specific appreciation sentence, artifact description, proof graph intro + link, explicit ask, sign-off)"
+        : "Keep the full template (greeting, opening line naming the role and company, optional self-intro from the pitch, technical hook, artifact description, proof graph intro + link, explicit ask, \"Thanks,\" + first name)";
+  return `Your previous draft had these problems:\n\n${lines.join("\n")}\n\nRewrite the email fixing these specific issues. ${structureReminder}. Keep the artifact reference, keep the proof graph link, keep the voice direct and specific. Do not add new AI-sounding language in the process of fixing the old one.\n\nReturn only valid JSON.`;
 }

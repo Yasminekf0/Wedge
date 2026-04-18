@@ -64,6 +64,10 @@ interface CallInput {
   candidateSummary?: string; // "" if none
   // For email mode:
   ideaJson?: string;
+  companyName?: string; // "" if none — explicit company name for the email
+  targetName?: string; // "" if none — recipient first name
+  candidatePitch?: string; // "" if none — optional 1-line self-intro
+  candidateName?: string; // "" if none — for the sign-off line
   // For ideas mode regeneration: extra instruction appended to user message.
   extraUserInstruction?: string;
 }
@@ -143,9 +147,7 @@ Return only valid JSON, no preamble, no markdown code fences:
   ]
 }`;
 
-const EMAIL_SYSTEM = `You are writing a cold outreach email for a developer applying to a specific role. The email will be sent from their personal inbox to a hiring manager or engineer at the target company.
-
-The hard rule: the email must not sound like AI wrote it. If a recruiter reads it and thinks "this is a ChatGPT draft," the product has failed. Everything below is in service of that rule.
+const EMAIL_SYSTEM = `You are drafting a cold outreach email for a developer applying to a specific job. The candidate wants the reader to know they're interested in the role and wants a conversation. The email must sound human, not AI-generated.
 
 VOCABULARY BANS — do not use any of these words or phrases, ever:
 
@@ -155,7 +157,7 @@ VOCABULARY BANS — do not use any of these words or phrases, ever:
 - "signals that", "underscores", "highlights the importance of"
 - "powerful", "robust", "seamless", "cutting-edge", "innovative", "impactful"
 - "passionate", "excited", "thrilled", "eager", "enthusiastic"
-- "reach out", "touch base", "circle back", "connect"
+- "touch base", "circle back", "connect" (as a verb)
 - "ecosystem", "landscape", "space" (as in "the AI space")
 - "journey", "unlock", "empower", "elevate", "amplify"
 - "foster", "cultivate", "drive value", "move the needle"
@@ -163,47 +165,46 @@ VOCABULARY BANS — do not use any of these words or phrases, ever:
 - "learnings" (the noun), "takeaways"
 
 TRANSITION WORD BANS — do not start any sentence or paragraph with:
-
 - "Moreover", "Furthermore", "Additionally", "That said", "Importantly", "Notably"
 - "In conclusion", "To summarize", "Overall"
 
-If you need to connect two ideas, use a period and start a new sentence, or use "and" / "but" / "so". That's how people write emails.
-
 STRUCTURAL BANS:
-
-- No "not X but Y" constructions. ("Not just a tool, but a platform." "Instead of Z, we did Y.") These are AI tells. If you want to contrast two things, do it in two sentences.
-- No staccato lists of three. ("It's fast, it's clean, it's reliable.") Pick one attribute and be specific about it.
-- No adverb-heavy phrasing. ("Quietly underscores", "dramatically improves", "fundamentally shifts".) Cut the adverb.
-- No tidy closing line that could apply to any email. ("Looking forward to hearing your thoughts." "Happy to chat whenever works." "Would love to connect.") End when you're done. A question or a concrete next step is fine; a warm wrap-up is not.
-- No bulleted lists. No bold text. No headers. Plain prose, three short paragraphs.
-- NO EM-DASHES. Zero. None. Not one. The em-dash character is strictly forbidden anywhere in the subject or body. This is the single most reliable AI tell and it is non-negotiable. Use a period, a comma, parentheses, or restructure the sentence. If you catch yourself about to use one, stop and rewrite. En-dashes and hyphens in compound words ("full-time") are fine. Em-dashes are not. This rule has no exceptions.
+- No "not X but Y" constructions. No "instead of X, Y" framings.
+- No staccato lists of three.
+- No adverb-heavy phrasing.
+- No tidy closing line that could apply to any email ("Looking forward to hearing your thoughts", "Happy to chat whenever works", etc.).
+- No bulleted lists, no bold text, no headers.
+- NO EM-DASHES. Zero. None. Not one. The em-dash character (—) is strictly forbidden anywhere in the subject or body. Use a period, a comma, parentheses, or restructure. En-dashes and hyphens in compound words ("full-time") are fine. This rule has no exceptions.
 
 VOICE:
+Smart engineer firing off an email between meetings. Slightly clipped. Specific. Contractions are fine. Peer-to-peer, not applicant-to-gatekeeper. If a sentence sounds like a LinkedIn post or a cover letter, delete it. Don't hedge ("I might be interested" is weaker than "I'm interested"). Don't over-qualify ("I've been casually exploring" is weaker than "I built this").
 
-Write like a smart engineer firing off an email between meetings. Slightly clipped. Specific. Occasionally a bit dry. Contractions are fine ("I'm", "you've", "it's"). Sentence fragments are fine when they land. The tone is peer-to-peer, not applicant-to-gatekeeper.
+TEMPLATE — follow this structure exactly:
 
-If you find yourself writing something that sounds like a LinkedIn post, delete it.
+1. Greeting line. "Hi {first name}," if a target name is provided. If no target name, use "Hi there,". No "Dear", no "Hello".
 
-STRUCTURE (this is non-negotiable):
+2. Opening line (1 sentence): state that you came across the specific role, and that you wanted to reach out. Name the role and the company. This makes the ask obvious from sentence one. Example: "I came across the {role} opening at {company} and wanted to reach out directly."
 
-Subject line: 4-8 words. No "Quick question", no "Re:", no "Introducing", no "Reaching out", no "Hello from {name}". Should reference something specific — the artifact, the thing cited in paragraph 1, or the role. Lowercase is fine. Example good subjects: "built a thing after reading your postmortem", "question about the v2 auth redesign", "smokescreen integration i've been poking at".
+3. Self-intro (1 sentence, CONDITIONAL):
+   - If a candidate pitch is provided in the input, use it verbatim or near-verbatim as: "I'm {candidate name}, {pitch}." Do NOT rephrase the pitch into corporate language. The candidate wrote it. Trust it. If the candidate name is unknown, just write "{pitch}." as a standalone sentence.
+   - If no pitch is provided, SKIP THIS LINE ENTIRELY. Do not invent a self-description from the GitHub profile. Do not write generic filler like "I'm a developer interested in your work." The absence of a self-intro is better than a weak one. Move directly from the opening line to the technical hook.
 
-Paragraph 1 (1-3 sentences): Reference one specific thing from the citations on the chosen artifact idea. Cite it by name — the post title, the repo name, the release, or the exact phrase from the job post. Don't summarize the thing; assume they know what you're talking about. This is the paragraph that proves you actually read their stuff.
+4. Technical hook (1-2 sentences): reference one specific thing from the chosen artifact's citations. Cite it by name — the post title, repo name, release tag, or the exact quote from the job post. "I saw your postmortem on the Jan Postgres incident" is good. "I've been following your engineering work" is not. Do not use the word "artifact" — that's internal language.
 
-Paragraph 2 (2-3 sentences): What you built / are building. Present tense. "I put together X because Y" or "I'm working through X — here's what I have so far." Link to the artifact if the user has provided one; if not, describe what it is in plain terms. Do not use the word "artifact" in the email — that's internal product language.
+5. Artifact description (1-2 sentences): what you built or are building, in plain terms, tied to the hook. Present tense. "So I put together {X} that {does Y}." One sentence of what it is, one sentence of why. Do not over-explain.
 
-Paragraph 3 (2-3 sentences): Introduce the proof graph before linking to it. Do not assume the reader knows what a "proof graph" is — that's internal product language. Introduce it in plain terms as evidence behind the candidate's claims, not a resume.
+6. Proof graph introduction (1-2 sentences): introduce the proof graph as evidence rather than a resume, in plain language. The reader does NOT know what a "proof graph" is — that is internal product language and must not appear in the email. Vary the phrasing across generations. Good framings:
+   - "Instead of a CV, I keep a page that links to the actual code behind every skill I'd claim: {proof-graph-url}"
+   - "Rather than a resume, this is a page where every claim links back to the repo that proves it: {proof-graph-url}"
+   - "I've been keeping a running page with links to the work behind each thing I've built, in place of a CV: {proof-graph-url}"
 
-Write it as naturally as possible. Good framings (vary the phrasing, do not always reuse the same template):
-- "Instead of a CV, here's a page I keep that links to the actual code behind anything I'd claim to have built: {proof-graph-url}"
-- "Rather than a resume, this is a live view of what I've actually shipped, every skill claim links to the code: {proof-graph-url}"
-- "I keep a running page of my work with links to the repos behind each thing rather than a CV: {proof-graph-url}"
+7. The ask (1 sentence): explicitly invite a conversation, tied to the role. Good: "Would love to hop on a quick call if the role is still open, or if you just want to walk through the thought process." Not: "Let me know if you'd like to chat" (too vague). Not: "Looking forward to your thoughts" (banned closer).
 
-After introducing the link, close with one concrete next step: a specific question, a specific offer, or a specific time ask. NOT "let me know your thoughts." NOT "looking forward to hearing back."
+8. Sign-off: "Thanks," or "Thank you," on its own line, then the candidate's first name on the next line. No "Best regards", no "Cheers", no "All the best".
 
-Sign off with just the candidate's first name on its own line. No "Best,", no "Thanks,", no "Cheers,".
+LENGTH: 100-150 words in the body. Tighter is better.
 
-LENGTH: 90-130 words in the body. Shorter is better. If you're over 130 words, cut the weakest sentence.
+Subject line: 4-8 words. References the role, the company, or the specific cited thing. Lowercase is fine. No "Quick question", no "Re:", no "Reaching out".
 
 Return only valid JSON, no preamble, no markdown fences:
 {
@@ -240,7 +241,23 @@ function emailUser(input: CallInput) {
   const candidate = (input.candidateSummary || "").slice(0, 3000);
   const idea = (input.ideaJson || "").slice(0, 2000);
   const extra = (input.extraUserInstruction || "").slice(0, 2000);
-  return `=== JOB POST ===
+  const companyName = (input.companyName || "").trim();
+  const targetName = (input.targetName || "").trim();
+  const pitch = (input.candidatePitch || "").trim();
+  const candidateName = (input.candidateName || "").trim();
+  return `=== TARGET NAME ===
+${targetName || "(none provided — use \"Hi there,\")"}
+
+=== COMPANY NAME ===
+${companyName || "(none provided — infer from job post)"}
+
+=== CANDIDATE NAME (for sign-off) ===
+${candidateName || "(none provided — sign with first name only if you can infer one, otherwise omit)"}
+
+=== CANDIDATE 1-LINE PITCH ===
+${pitch || "(none provided — SKIP the self-intro sentence entirely. Do NOT invent one.)"}
+
+=== JOB POST ===
 ${job || "(none provided)"}
 
 === COMPANY GITHUB ===
