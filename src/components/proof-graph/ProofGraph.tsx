@@ -823,14 +823,12 @@ function PannableBoard({
 
 function SparseList({
   claims,
-  expandedIds,
-  onToggle,
+  onSelect,
   activeFilters,
   filterLabelById,
 }: {
   claims: Claim[];
-  expandedIds: Set<string>;
-  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
   activeFilters: Set<string>;
   filterLabelById: Map<string, string>;
 }) {
@@ -845,20 +843,13 @@ function SparseList({
           <button
             key={c.id}
             type="button"
-            onClick={() => onToggle(c.id)}
+            onClick={() => onSelect(c.id)}
             className={[
               "block w-full rounded-lg border border-border bg-background p-4 text-left transition-all",
               dim ? "opacity-25 saturate-50" : "opacity-100",
             ].join(" ")}
           >
             <p className="text-[15px] font-medium text-foreground">{c.text}</p>
-            {expandedIds.has(c.id) && (
-              <div className="mt-3 space-y-2">
-                {c.evidence.map((ev, i) => (
-                  <EvidenceRow key={i} ev={ev} />
-                ))}
-              </div>
-            )}
             {c.tags.length > 0 && (
               <p className="mono mt-3 text-[10px] uppercase tracking-wider text-tertiary-fg">
                 {c.tags.map((t) => filterLabelById.get(t) || t).join(" · ")}
