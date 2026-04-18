@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { exampleProfile } from "@/components/proof-graph/exampleProfile";
 import { ProofGraph } from "@/components/proof-graph/ProofGraph";
@@ -27,13 +27,7 @@ function ProofGraphPage() {
   return (
     <div className="relative">
       <ProofGraph profile={profile} />
-      <Link
-        to="/"
-        className="mono fixed bottom-4 left-4 z-50 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:bg-foreground/5 hover:text-foreground"
-      >
-        ← draft job outreach
-      </Link>
-      {/* Demo-only toggle, bottom-right corner */}
+      {/* Demo-only toggle, top-right corner */}
       <button
         type="button"
         onClick={() => setJobLoaded((v) => !v)}
