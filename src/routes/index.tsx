@@ -553,12 +553,45 @@ function WedgePage() {
     await generateEmail(jobMd, proof, company, ideas[0]);
   }
 
+  async function regenerateBlunter() {
+    if (!ideas || ideas.length === 0) return;
+    await generateEmail(
+      jobMd,
+      proof,
+      company,
+      ideas[0],
+      "Make it 20% more direct. Cut hedges. Shorter sentences.",
+    );
+  }
+
+  async function regenerateWarmer() {
+    if (!ideas || ideas.length === 0) return;
+    await generateEmail(
+      jobMd,
+      proof,
+      company,
+      ideas[0],
+      "Keep the specificity but add a touch more warmth. One concrete human moment (a reaction, a minor aside). Not effusive.",
+    );
+  }
+
   async function copyEmail() {
     if (!email) return;
     try {
       await navigator.clipboard.writeText(email.body);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function copySubject() {
+    if (!email) return;
+    try {
+      await navigator.clipboard.writeText(email.subject);
+      setCopiedSubject(true);
+      setTimeout(() => setCopiedSubject(false), 1600);
     } catch {
       /* ignore */
     }
