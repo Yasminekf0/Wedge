@@ -108,24 +108,6 @@ async function fetchJobMarkdown(url: string): Promise<string> {
   return res.text();
 }
 
-function summariseCandidate(p: CandidateProof | null): string {
-  if (!p) return "(no public GitHub profile available)";
-  const repos = p.topRepos
-    .slice(0, 5)
-    .map(
-      (r) =>
-        `- ${r.name} (★${r.stargazers_count}, ${r.language || "unknown"}): ${r.description || "no description"}`,
-    )
-    .join("\n");
-  return `Handle: @${p.user.login}
-Followers: ${p.user.followers}
-Public repos: ${p.user.public_repos}
-Total stars: ${p.totalStars}
-Top languages overall: ${p.topLanguages.join(", ") || "—"}
-Top repos:
-${repos || "—"}`;
-}
-
 const RESOLVE_LABEL: Record<Exclude<ResolveStage, "idle" | "done">, string> = {
   reading: "RESOLVING · reading job post",
   identifying: "RESOLVING · identifying company",
@@ -201,7 +183,6 @@ function WedgePage() {
 
   async function generateEmail(
     jobMarkdown: string,
-    p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
     mode: SlopMode = "default",
@@ -211,12 +192,12 @@ function WedgePage() {
     setSlopHint(null);
     setEmailStage("drafting");
     const voiceInstruction = instructionForMode(mode);
-    const candidateName = p?.user?.login || "";
+    const candidateName = CANDIDATE_FIRST_NAME;
     const baseData = {
       mode: "email" as const,
       jobMarkdown,
       companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-      candidateSummary: summariseCandidate(p),
+      candidateSummary: CANDIDATE_SUMMARY,
       ideaJson: JSON.stringify(idea, null, 2),
       companyName: companyName || c?.org?.name || "",
       targetName: target.trim(),
