@@ -12,11 +12,9 @@ import {
   SkeletonRows,
 } from "@/components/wedge/primitives";
 import {
-  fetchCandidateProof,
   fetchCompanySignal,
   getRateLimitRemaining,
   resolveGitHubOrg,
-  type CandidateProof,
   type CompanySignal,
   type ResolvedOrg,
 } from "@/lib/github";
@@ -25,9 +23,11 @@ import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
 import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilter";
+import { candidateSummaryFromProfile } from "@/lib/candidateFromProfile";
 
-// Sasha's GitHub handle — derived identity, no longer a user input.
-const SASHA_GH = "sashazyuzin";
+// Candidate identity is sourced from the proof graph, not a live GitHub fetch.
+const CANDIDATE_SUMMARY = candidateSummaryFromProfile(exampleProfile);
+const CANDIDATE_FIRST_NAME = exampleProfile.header.name.split(" ")[0] || "";
 
 // ---------- voice modes ----------
 
