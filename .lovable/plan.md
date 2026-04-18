@@ -1,65 +1,53 @@
 
 
-## Goal
+## Why candidate citations don't show
 
-Stop calling GitHub for Sasha. Replace every use of the live `CandidateProof` with a hardcoded summary derived from `exampleProfile` (the proof graph data), so the LLM "knows the candidate" from the proof graph, not from GitHub API output.
+In `outreach.tsx` the validator's `candidateProfile` is hardcoded to `null` (line 287). `validateCandidateGithub` requires a non-null proof with `topRepos`, so every `candidate_github` citation Claude produces is dropped silently. Result: ideas show job/repo/blog/hn citations only.
 
-## What feeds off candidate GitHub today (in `src/routes/outreach.tsx`)
+Secondary issue: the Claude prompt still tells the model to cite `candidate_repo` (a GitHub repo name), but our new `CANDIDATE_SUMMARY` is proof-graph claims, not a repo list. So even if validation passed, the model is grounding on the wrong shape.
 
-1. `fetchCandidateProof(SASHA_GH)` → sets `proof`, `proofState`. Used in:
-   - `summariseCandidate(p)` → injected into the ideas prompt and the email prompt as `=== CANDIDATE GITHUB ===`.
-   - `candidateName = p?.user?.login` → sign-off name in the email payload.
-   - `proofState` UI ("loading / missing / ready") — but there's no longer a Section that renders this (proof section now embeds the proof-graph). Dead state.
-2. `getRateLimitRemaining()` post-fetch — only meaningful for the candidate fetch + company fetch; we keep it for company.
+## Fix
 
-## Plan
+### 1. Build a candidate-claim source for validation
 
-### 1. New helper: `candidateSummaryFromProfile()`
+Extend `candidateFromProfile.ts` to also export a structured list of "candidate claim refs" — one entry per claim, with a stable id (e.g. claim section + first 6 words slugified, or the existing `claim.id` if present in the proof type) and the raw claim text. This becomes the validator's source-of-truth.
 
-Add a small pure function (top of `outreach.tsx`, or a new `src/lib/candidateFromProfile.ts` — prefer the lib file to keep the route lean) that takes `exampleProfile` and produces a plain-text block in roughly the same shape `summariseCandidate` produces today:
+### 2. Update the citation schema
 
-```
-Name: Sasha Lindqvist
-Location: Stockholm, Sweden
-Bio: Backend engineer. Distributed systems, Rust, infrastructure.
+In `claude.functions.ts`:
+- Rename `candidate_github` → `candidate_proof` (the source name in the prompt and `CitationSource` union).
+- Replace `candidate_repo` with `candidate_claim` (the slug/id of the cited claim).
+- Update `IDEAS_SYSTEM` text: instead of "cite the specific repo of theirs", say "cite the specific claim from the candidate's proof graph by its id".
+- Update the `=== CANDIDATE GITHUB ===` block label to `=== CANDIDATE PROOF GRAPH ===` and include the claim ids alongside text so Claude can reference them.
 
-Top claims:
-- [Work] Senior Backend Engineer, Klarna — Led the payments infra rewrite, cut p99 latency by 60%. (Rust, Tokio, Postgres, Kafka, gRPC)
-- [Project] kvraft — distributed key-value store in Rust to learn Raft. (Rust, Tokio, RocksDB) — github.com/...
-- [Achievement] Won the Rust Foundation Community Grant for OSS work.
-- ...etc
-```
+### 3. Update the validator
 
-Build it from `exampleProfile.claims`: include section, headline `text`, optional `subtext`, `details.stack` (joined), and the first repo/deploy `evidence.url` if present. Cap at ~10 claims.
+In `validation.ts`:
+- Drop the `CandidateProof` import.
+- Change `candidateProfile` field on `ValidationSources` to `candidateClaims: { id: string; text: string }[]`.
+- Replace `validateCandidateGithub` with `validateCandidateProof`: accept the citation if `candidate_claim` matches a known claim id (case/space-insensitive).
 
-This block is what we pass to the LLM as `candidateSummary` — same field name, same prompt slot, no Claude prompt changes.
+### 4. Wire it in `outreach.tsx`
 
-### 2. Strip GitHub fetching for the candidate
+- Build `CANDIDATE_CLAIMS` once at module level alongside `CANDIDATE_SUMMARY`.
+- Pass `candidateClaims: CANDIDATE_CLAIMS` into the `sources` object on both validation calls.
 
-In `outreach.tsx`:
-- Remove `SASHA_GH`, `fetchCandidateProof`, `CandidateProof` import, `proof` / `proofState` state, the `proofP` promise, and the `setProof*` calls.
-- In `handleGenerate`, drop `proofP` from the `Promise.all`. Pass `null` (or a lightweight stub object — see below) wherever `proof` was passed.
-- Replace the `summariseCandidate(p)` call sites with a single module-level constant: `const CANDIDATE_SUMMARY = candidateSummaryFromProfile(exampleProfile);` and use that.
-- For `candidateName`, hardcode from `exampleProfile.header.name.split(" ")[0]` (i.e. "Sasha").
-- Delete `summariseCandidate` (no longer used).
-- `runIdeasAndEmail` and `generateEmail` signatures: drop the `p: CandidateProof | null` parameter. Update internal references and the call sites (`regenerateIdeas`, `selectIdea`, `regenerateEmail`, `setMode`, `rerunWithHandle`).
+### 5. Update `IdeaBlock.tsx` rendering
 
-### 3. UI cleanup
+- Add `candidate_proof` to `SOURCE_PREFIX` (e.g. `"[you]"`).
+- Render the `candidate_claim` text (look up the claim by id from the same module-level list passed via prop or imported directly) instead of `candidate_repo`.
 
-- The proof-graph section already renders the proof graph preview from `exampleProfile`, independent of any fetch. No UI change needed there.
-- Remove the now-dead `proofState`-driven branches if any exist (skim and delete).
-- Loading copy that referenced "pulling your proof graph" stays accurate (the proof graph is the source).
+## Files touched
 
-### 4. Files touched
-
-- `src/routes/outreach.tsx` — the bulk of the change.
-- `src/lib/candidateFromProfile.ts` — new, ~30 lines.
-- No changes to `claude.functions.ts`, `github.ts`, `proof-graph/*`, prompts, or routes.
+- `src/lib/candidateFromProfile.ts` — add `candidateClaimsFromProfile()`.
+- `src/server/claude.functions.ts` — rename source/field, update prompt + user message label.
+- `src/lib/validation.ts` — swap candidate validator and source shape.
+- `src/routes/outreach.tsx` — pass real candidate claims into validation sources.
+- `src/components/wedge/IdeaBlock.tsx` — render the new citation type.
 
 ## Verification
 
-- Network tab on `/outreach` Generate: no `api.github.com/users/...` or `/repos/...` calls for Sasha. Only the company-org calls remain.
-- Generated email body still references Sasha's specific work (Klarna rewrite, kvraft, Rust grant, etc.) because those claims are now in the candidate summary the LLM sees.
-- Sign-off line still ends with "Thanks, Sasha".
-- Removing the `GITHUB_TOKEN` would not break candidate flow (only affects company resolution, unchanged).
+- Generate ideas for any job. At least one idea should now include a `[you]` citation referencing a specific Sasha claim (e.g. "kvraft" or "Klarna payments rewrite").
+- The citation's "relevance" line connects that claim to the idea.
+- "bridge" pattern ideas can now include candidate-proof + company-source pairs without being downgraded.
 
