@@ -274,7 +274,6 @@ function WedgePage() {
   async function runIdeasAndEmail(
     jobMarkdown: string,
     c: CompanySignal | null,
-    p: CandidateProof | null,
     b: BlogSignal | null,
     h: HNSignal | null,
   ) {
@@ -285,7 +284,7 @@ function WedgePage() {
       blogSignal: b,
       hnSignal: h,
       jobPostMarkdown: jobMarkdown,
-      candidateProfile: p,
+      candidateProfile: null,
     };
     try {
       const res = await callClaudeFn({
@@ -295,7 +294,7 @@ function WedgePage() {
           companySignalJson: c ? JSON.stringify(c, null, 2) : "",
           blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
           hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
-          candidateSummary: summariseCandidate(p),
+          candidateSummary: CANDIDATE_SUMMARY,
         },
       });
       let validated: ArtifactIdea[] = [];
@@ -316,7 +315,7 @@ function WedgePage() {
               companySignalJson: c ? JSON.stringify(c, null, 2) : "",
               blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
               hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
-              candidateSummary: summariseCandidate(p),
+              candidateSummary: CANDIDATE_SUMMARY,
               extraUserInstruction: `Your previous response contained ideas with fabricated or unverifiable citations, which have been dropped. Generate ${need} more ideas, grounded only in the sources provided. Do not invent citations.`,
             },
           });
@@ -368,7 +367,7 @@ function WedgePage() {
     }
     setUrlError(null);
 
-    const ghTrim = SASHA_GH;
+    
 
     setHasResults(true);
     setLoading(true);
@@ -383,8 +382,6 @@ function WedgePage() {
     setCompany(null);
     setBlog(null);
     setHn(null);
-    setProofState("loading");
-    setProof(null);
     setJobMd("");
     setJobFailed(false);
     setIdeas(null);
