@@ -720,15 +720,6 @@ function PannableBoard({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={recenter}
-        aria-label="Recenter board"
-        className="mono absolute bottom-4 right-4 z-40 inline-flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:border-muted-fg hover:text-foreground"
-      >
-        <RotateCcw className="h-3 w-3" />
-        Recenter
-      </button>
     </div>
   );
 }
