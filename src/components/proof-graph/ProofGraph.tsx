@@ -590,7 +590,7 @@ function PannableBoard({
         className="relative origin-top-left"
         style={{
           width: BOARD_W,
-          height: BOARD_H,
+          height: boardHeight,
           transform: `translate3d(${tx}px, ${ty}px, 0)`,
           transition: isDragging
             ? "none"
@@ -600,7 +600,7 @@ function PannableBoard({
           backgroundSize: "24px 24px",
         }}
       >
-        <SectionLabels />
+        <SectionLabels sections={sections} />
 
         {claims.map((claim, i) => {
           const isMatch = matches(claim);
