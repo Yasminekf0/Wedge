@@ -36,6 +36,8 @@ interface CallInput {
   // JSON-serialized strings sent from the client so we don't have to redeclare
   // the full type tree on the server.
   companySignalJson?: string; // "" if none
+  blogSignalJson?: string; // "" if none
+  hnSignalJson?: string; // "" if none
   candidateSummary?: string; // "" if none
   // For email mode:
   ideaJson?: string;
