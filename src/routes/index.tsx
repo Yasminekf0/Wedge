@@ -814,7 +814,13 @@ function WedgePage() {
             ) : (
               <div className="space-y-10">
                 {ideas.map((idea, i) => (
-                  <IdeaBlock key={i} index={i + 1} idea={idea} />
+                  <IdeaBlock
+                    key={i}
+                    index={i + 1}
+                    idea={idea}
+                    selected={selectedIdeaIndex === i}
+                    onSelect={() => selectIdea(i)}
+                  />
                 ))}
                 {shortIdeasNote && (
                   <p className="mono text-[11px] uppercase tracking-wider text-tertiary-fg">
