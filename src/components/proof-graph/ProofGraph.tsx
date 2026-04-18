@@ -786,11 +786,11 @@ function PannableBoard({
             <div key={claim.id} data-card>
               <ClaimCard
                 claim={claim}
-                expanded={expandedIds.has(claim.id)}
+                selected={selectedId === claim.id}
                 dim={dim}
                 highlight={highlight}
                 jobMatch={jobMatchedIds.has(claim.id)}
-                onToggle={onToggle}
+                onSelect={onSelect}
                 index={i}
                 filterLabelById={filterLabelById}
               />
