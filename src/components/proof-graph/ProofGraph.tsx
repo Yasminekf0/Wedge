@@ -242,21 +242,25 @@ function FilterBar({
 // Section labels (floating on the board)
 // ---------------------------------------------------------------------------
 
-function SectionLabels() {
+function SectionLabels({
+  sections,
+}: {
+  sections: Array<{ section: ClaimSection; y: number }>;
+}) {
   return (
     <>
-      {(Object.keys(SECTION_ZONES) as ClaimSection[]).map((s) => {
-        const z = SECTION_ZONES[s];
-        return (
-          <div
-            key={s}
-            className="mono pointer-events-none absolute select-none text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg"
-            style={{ left: z.labelX, top: z.labelY }}
-          >
-            {z.label}
+      {sections.map(({ section, y }) => (
+        <div
+          key={section}
+          className="pointer-events-none absolute select-none"
+          style={{ left: 32, top: y, width: PAD_X - 48 }}
+        >
+          <div className="mono text-[11px] font-medium uppercase tracking-[0.18em] text-tertiary-fg">
+            {SECTION_LABEL[section]}
           </div>
-        );
-      })}
+          <div className="mt-2 h-px w-8 bg-border" />
+        </div>
+      ))}
     </>
   );
 }
