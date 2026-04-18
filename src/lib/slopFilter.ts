@@ -10,7 +10,9 @@ export type SlopViolationType =
   | "banned_closing"
   | "em_dash"
   | "adverb_pileup"
-  | "length";
+  | "length"
+  | "missing_role_reference"
+  | "missing_explicit_ask";
 
 export interface SlopViolation {
   type: SlopViolationType;
