@@ -454,22 +454,6 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const proofP: Promise<CandidateProof | null> = fetchCandidateProof(ghTrim)
-      .then((p) => {
-        if (!p) {
-          setProofState("missing");
-          return null;
-        }
-        setProof(p);
-        setProofState("ready");
-        return p;
-      })
-      .catch((e) => {
-        console.error(e);
-        setProofState("missing");
-        return null;
-      });
-
     // Blog + HN: kick off in parallel. Domain is best-effort: prefer the
     // org's `blog` field once company resolves, otherwise fall back to the
     // job post URL's host.
@@ -513,13 +497,13 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const [c, p, b, h] = await Promise.all([companyP, proofP, blogP, hnP]);
+    const [c, b, h] = await Promise.all([companyP, blogP, hnP]);
 
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
     // ---------- Step 2: ideas + email ----------
-    await runIdeasAndEmail(jobMarkdown, c, p, b, h);
+    await runIdeasAndEmail(jobMarkdown, c, b, h);
     setLoading(false);
   }
 
@@ -590,7 +574,7 @@ function WedgePage() {
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
-    await runIdeasAndEmail(jobMd, c, proof, b, hSig);
+    await runIdeasAndEmail(jobMd, c, b, hSig);
     setLoading(false);
   }
 
@@ -598,7 +582,7 @@ function WedgePage() {
     setIdeasError(false);
     setIdeas(null);
     setShortIdeasNote(null);
-    await runIdeasAndEmail(jobMd, company, proof, blog, hn);
+    await runIdeasAndEmail(jobMd, company, blog, hn);
   }
 
   // The currently-selected idea, or null when none picked.
@@ -616,18 +600,18 @@ function WedgePage() {
     requestAnimationFrame(() => {
       outreachRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    await generateEmail(jobMd, proof, company, ideas[i], "default");
+    await generateEmail(jobMd, company, ideas[i], "default");
   }
 
   async function regenerateEmail() {
     if (!selectedIdea) return;
-    await generateEmail(jobMd, proof, company, selectedIdea, voiceMode);
+    await generateEmail(jobMd, company, selectedIdea, voiceMode);
   }
 
   async function setMode(next: SlopMode) {
     if (!selectedIdea) return;
     setVoiceMode(next);
-    await generateEmail(jobMd, proof, company, selectedIdea, next);
+    await generateEmail(jobMd, company, selectedIdea, next);
   }
 
   async function copyEmail() {
