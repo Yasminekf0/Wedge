@@ -178,6 +178,14 @@ function WedgePage() {
     h: HNSignal | null,
   ) {
     let firstIdea: ArtifactIdea | null = null;
+    setShortIdeasNote(null);
+    const sources = {
+      companySignal: c,
+      blogSignal: b,
+      hnSignal: h,
+      jobPostMarkdown: jobMarkdown,
+      candidateProfile: p,
+    };
     try {
       const res = await callClaudeFn({
         data: {
@@ -189,13 +197,62 @@ function WedgePage() {
           candidateSummary: summariseCandidate(p),
         },
       });
+      let validated: ArtifactIdea[] = [];
       if (res.mode === "ideas") {
-        setIdeas(res.ideas);
-        firstIdea = res.ideas[0] ?? null;
+        setIdeasStage("verifying");
+        validated = validateCitations(res.ideas, sources);
+      }
+
+      // Regenerate once if validation left fewer than 3 ideas.
+      if (validated.length < 3) {
+        setIdeasStage("regenerating");
+        const need = 3 - validated.length;
+        try {
+          const res2 = await callClaudeFn({
+            data: {
+              mode: "ideas",
+              jobMarkdown,
+              companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+              blogSignalJson: b ? JSON.stringify(b, null, 2) : "",
+              hnSignalJson: h ? JSON.stringify(h, null, 2) : "",
+              candidateSummary: summariseCandidate(p),
+              extraUserInstruction: `Your previous response contained ideas with fabricated or unverifiable citations, which have been dropped. Generate ${need} more ideas, grounded only in the sources provided. Do not invent citations.`,
+            },
+          });
+          if (res2.mode === "ideas") {
+            const more = validateCitations(res2.ideas, sources);
+            // Merge by title to avoid duplicates from the same idea pool.
+            const seen = new Set(validated.map((i) => i.title.toLowerCase()));
+            for (const m of more) {
+              if (!seen.has(m.title.toLowerCase())) {
+                validated.push(m);
+                seen.add(m.title.toLowerCase());
+              }
+              if (validated.length >= 3) break;
+            }
+          }
+        } catch (e) {
+          console.error("regeneration failed", e);
+        }
+      }
+
+      validated = validated.slice(0, 3);
+      setIdeas(validated);
+      if (validated.length > 0 && validated.length < 3) {
+        setShortIdeasNote(
+          `Only ${validated.length} idea${validated.length === 1 ? "" : "s"} with verifiable citations this run. Regenerate to try again.`,
+        );
+      }
+      if (validated.length === 0) {
+        setIdeasError(true);
+      } else {
+        firstIdea = validated[0];
       }
     } catch (e) {
       console.error(e);
       setIdeasError(true);
+    } finally {
+      setIdeasStage("idle");
     }
 
     if (firstIdea) {
