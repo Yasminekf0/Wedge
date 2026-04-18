@@ -284,7 +284,7 @@ export const callClaude = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1500,
+        max_tokens: data.mode === "ideas" ? 3000 : 1500,
         system,
         messages: [{ role: "user", content: user }],
       }),
