@@ -168,10 +168,7 @@ interface LayoutResult {
   height: number;
 }
 
-function autoLayout(
-  rawClaims: Claim[],
-  expandedIds: Set<string> = new Set(),
-): LayoutResult {
+function autoLayout(rawClaims: Claim[]): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
     achievements: [],
@@ -201,11 +198,7 @@ function autoLayout(
         rowMaxH = 0;
       }
       const x = PAD_X + col * (COL_W + COL_GAP);
-      const baseH = SIZE_TO_HEIGHT.md;
-      // Reserve extra room for pre-expanded cards so neighbors don't overlap.
-      const evidenceCount = c.evidence.length || 1;
-      const expandBonus = expandedIds.has(c.id) ? 28 + evidenceCount * 64 : 0;
-      const h = baseH + expandBonus;
+      const h = SIZE_TO_HEIGHT.md;
       positioned.set(c.id, { ...c, position: { x, y: rowY } });
       col += span;
       rowMaxH = Math.max(rowMaxH, h);
