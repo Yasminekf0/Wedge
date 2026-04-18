@@ -78,36 +78,57 @@ function LanguageDot({ lang }: { lang?: string }) {
   );
 }
 
-// Auto-layout for claims without explicit positions. Loose, deterministic.
-function autoLayout(claims: Claim[]): Claim[] {
+// Pack claims into a tidy grid per section. Each section gets a header row,
+// then claims flow left-to-right across COLS columns, wrapping as needed.
+interface LayoutResult {
+  claims: Claim[];
+  sections: Array<{ section: ClaimSection; y: number }>;
+  height: number;
+}
+
+function autoLayout(rawClaims: Claim[]): LayoutResult {
   const buckets: Record<ClaimSection, Claim[]> = {
     projects: [],
     work: [],
     education: [],
   };
-  for (const c of claims) buckets[c.section].push(c);
+  for (const c of rawClaims) buckets[c.section].push(c);
 
-  const zoneTops: Record<ClaimSection, number> = {
-    projects: 70,
-    work: 640,
-    education: 940,
+  const positioned = new Map<string, Claim>();
+  const sections: Array<{ section: ClaimSection; y: number }> = [];
+  let cursorY = PAD_TOP;
+
+  for (const section of SECTION_ORDER) {
+    const items = buckets[section];
+    if (items.length === 0) continue;
+
+    sections.push({ section, y: cursorY });
+    let rowY = cursorY + SECTION_HEADER_H;
+    let col = 0;
+    let rowMaxH = 0;
+
+    for (const c of items) {
+      const span = SIZE_TO_SPAN[c.size || "md"];
+      if (col + span > COLS) {
+        rowY += rowMaxH + ROW_GAP;
+        col = 0;
+        rowMaxH = 0;
+      }
+      const x = PAD_X + col * (COL_W + COL_GAP);
+      const h = SIZE_TO_HEIGHT[c.size || "md"];
+      positioned.set(c.id, { ...c, position: { x, y: rowY } });
+      col += span;
+      rowMaxH = Math.max(rowMaxH, h);
+    }
+
+    cursorY = rowY + rowMaxH + SECTION_GAP;
+  }
+
+  return {
+    claims: rawClaims.map((c) => positioned.get(c.id) || c),
+    sections,
+    height: Math.max(cursorY, 600),
   };
-
-  return claims.map((c) => {
-    if (c.position) return c;
-    const idx = buckets[c.section].indexOf(c);
-    const col = idx % 3;
-    const row = Math.floor(idx / 3);
-    const jitterX = ((idx * 53) % 40) - 20;
-    const jitterY = ((idx * 31) % 30) - 15;
-    return {
-      ...c,
-      position: {
-        x: 60 + col * 420 + jitterX,
-        y: zoneTops[c.section] + row * 220 + jitterY,
-      },
-    };
-  });
 }
 
 // ---------------------------------------------------------------------------
