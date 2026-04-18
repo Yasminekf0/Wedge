@@ -373,6 +373,8 @@ function WedgePage() {
     setIdeasError(false);
     setEmail(null);
     setEmailError(false);
+    setSelectedIdeaIndex(null);
+    setVoiceMode("default");
 
     // ---------- Step 0a: Jina ----------
     let jobMarkdown = "";
@@ -586,31 +588,33 @@ function WedgePage() {
     await runIdeasAndEmail(jobMd, company, proof, blog, hn);
   }
 
+  // The currently-selected idea, or null when none picked.
+  const selectedIdea =
+    ideas && selectedIdeaIndex !== null ? ideas[selectedIdeaIndex] ?? null : null;
+
+  async function selectIdea(i: number) {
+    if (!ideas || i < 0 || i >= ideas.length) return;
+    setSelectedIdeaIndex(i);
+    // Reset to default mode whenever the artifact changes — modes are tied
+    // to a single drafting context.
+    setVoiceMode("default");
+    // Scroll Section 04 into view (small delay so the empty-state -> draft
+    // swap doesn't cause a jarring jump).
+    requestAnimationFrame(() => {
+      outreachRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    await generateEmail(jobMd, proof, company, ideas[i], "default");
+  }
+
   async function regenerateEmail() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(jobMd, proof, company, ideas[0]);
+    if (!selectedIdea) return;
+    await generateEmail(jobMd, proof, company, selectedIdea, voiceMode);
   }
 
-  async function regenerateBlunter() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(
-      jobMd,
-      proof,
-      company,
-      ideas[0],
-      "Make it 20% more direct. Cut hedges. Shorter sentences.",
-    );
-  }
-
-  async function regenerateWarmer() {
-    if (!ideas || ideas.length === 0) return;
-    await generateEmail(
-      jobMd,
-      proof,
-      company,
-      ideas[0],
-      "Keep the specificity but add a touch more warmth. One concrete human moment (a reaction, a minor aside). Not effusive.",
-    );
+  async function setMode(next: SlopMode) {
+    if (!selectedIdea) return;
+    setVoiceMode(next);
+    await generateEmail(jobMd, proof, company, selectedIdea, next);
   }
 
   async function copyEmail() {
