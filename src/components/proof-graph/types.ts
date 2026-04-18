@@ -15,6 +15,8 @@ export interface Evidence {
   meta?: string;
   /** Primary language (for repo evidence). Used as a colored dot. */
   language?: string;
+  /** Optional logo URL. If omitted, a favicon is derived from `url` when possible. */
+  logo?: string;
 }
 
 export interface Claim {
