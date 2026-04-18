@@ -19,6 +19,8 @@ import {
   type CompanySignal,
   type ResolvedOrg,
 } from "@/lib/github";
+import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
+import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 
 export const Route = createFileRoute("/")({
@@ -104,6 +106,8 @@ function WedgePage() {
     "idle" | "loading" | "missing" | "ready"
   >("idle");
   const [company, setCompany] = React.useState<CompanySignal | null>(null);
+  const [blog, setBlog] = React.useState<BlogSignal | null>(null);
+  const [hn, setHn] = React.useState<HNSignal | null>(null);
   const [rateLow, setRateLow] = React.useState(false);
 
   const [proofState, setProofState] = React.useState<
