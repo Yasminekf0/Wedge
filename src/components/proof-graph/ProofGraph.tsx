@@ -439,6 +439,8 @@ function ClaimCard({
 
 interface BoardProps {
   claims: Claim[];
+  sections: Array<{ section: ClaimSection; y: number }>;
+  boardHeight: number;
   expandedId: string | null;
   onToggle: (id: string) => void;
   activeFilters: Set<string>;
@@ -447,6 +449,8 @@ interface BoardProps {
 
 function PannableBoard({
   claims,
+  sections,
+  boardHeight,
   expandedId,
   onToggle,
   activeFilters,
