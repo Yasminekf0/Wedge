@@ -90,6 +90,54 @@ function LanguageDot({ lang }: { lang?: string }) {
   );
 }
 
+// Map an evidence type to an icon + a tint color (used for the glyph ring).
+const EVIDENCE_ICON: Record<EvidenceType, React.ComponentType<{ className?: string }>> = {
+  repo: Github,
+  deploy: Globe,
+  work: Building2,
+  education: GraduationCap,
+  link: Link2,
+};
+
+const SECTION_TINT: Record<ClaimSection, string> = {
+  projects: "#7c5cff", // violet
+  work: "#4cb2ff",     // blue
+  education: "#f0a23a", // amber
+};
+
+// Glyph rendered at the top-left of every claim card.
+// Uses the primary evidence to choose icon + tint (language color when present),
+// falling back to the section tint. This is the "logo" that makes nodes pop.
+function ClaimGlyph({ claim }: { claim: Claim }) {
+  const primary = claim.evidence[0];
+  const Icon = primary ? EVIDENCE_ICON[primary.type] ?? Box : Box;
+  const langColor = primary?.language
+    ? LANGUAGE_COLORS[primary.language]
+    : undefined;
+  const tint = langColor || SECTION_TINT[claim.section];
+
+  return (
+    <div
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"
+      style={{
+        borderColor: `color-mix(in oklab, ${tint} 55%, transparent)`,
+        background: `color-mix(in oklab, ${tint} 14%, transparent)`,
+        boxShadow: `0 0 0 1px color-mix(in oklab, ${tint} 18%, transparent), 0 6px 18px -10px ${tint}`,
+      }}
+      aria-hidden
+    >
+      <Icon className="h-4 w-4" />
+      {/* Language pip — only when we have a language signal */}
+      {langColor && (
+        <span
+          className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-background"
+          style={{ backgroundColor: langColor }}
+        />
+      )}
+    </div>
+  );
+}
+
 // Pack claims into a tidy grid per section. Each section gets a header row,
 // then claims flow left-to-right across COLS columns, wrapping as needed.
 interface LayoutResult {
