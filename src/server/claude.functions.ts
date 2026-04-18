@@ -13,12 +13,35 @@ export type ArtifactPattern =
   | "missing_piece"
   | "steelman";
 
+export type CitationSource =
+  | "job_post"
+  | "company_github"
+  | "company_blog"
+  | "hn"
+  | "candidate_github";
+
+export interface Citation {
+  source: CitationSource;
+  // Exactly one set of ref fields populated, depending on `source`:
+  repo_name?: string; // company_github
+  release_tag?: string; // company_github (optional, pairs with repo_name)
+  post_title?: string; // company_blog
+  post_url?: string; // company_blog
+  hn_thread_title?: string; // hn
+  hn_thread_url?: string; // hn
+  job_post_quote?: string; // job_post (≤140 chars verbatim)
+  candidate_repo?: string; // candidate_github
+  /** Why this specific source drove this specific idea. One sentence. */
+  relevance: string;
+}
+
 export interface ArtifactIdea {
   title: string;
   pattern: ArtifactPattern;
   why_it_lands: string;
   estimated_hours: number;
   what_to_build: string;
+  citations: Citation[];
 }
 
 export interface IdeasResult {
@@ -41,6 +64,8 @@ interface CallInput {
   candidateSummary?: string; // "" if none
   // For email mode:
   ideaJson?: string;
+  // For ideas mode regeneration: extra instruction appended to user message.
+  extraUserInstruction?: string;
 }
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
