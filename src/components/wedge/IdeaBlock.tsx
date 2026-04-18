@@ -5,14 +5,20 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { ArtifactIdea, Citation } from "@/server/claude.functions";
+import { exampleProfile } from "@/components/proof-graph/exampleProfile";
+import { candidateClaimsFromProfile } from "@/lib/candidateFromProfile";
 
 const SOURCE_PREFIX: Record<Citation["source"], string> = {
   job_post: "[job]",
   company_github: "[repo]",
   company_blog: "[blog]",
   hn: "[hn]",
-  candidate_github: "[you]",
+  candidate_proof: "[you]",
 };
+
+const CANDIDATE_CLAIMS_BY_ID = new Map(
+  candidateClaimsFromProfile(exampleProfile).map((c) => [c.id, c.text]),
+);
 
 function CitationLine({ c }: { c: Citation }) {
   const prefix = SOURCE_PREFIX[c.source] || "[src]";
@@ -62,9 +68,17 @@ function CitationLine({ c }: { c: Citation }) {
         <span className="text-foreground">{c.hn_thread_title}</span>
       );
       break;
-    case "candidate_github":
-      ref = <span className="mono text-foreground">{c.candidate_repo}</span>;
+    case "candidate_proof": {
+      const claimText = c.candidate_claim
+        ? CANDIDATE_CLAIMS_BY_ID.get(c.candidate_claim)
+        : undefined;
+      ref = (
+        <span className="text-foreground">
+          {claimText || c.candidate_claim}
+        </span>
+      );
       break;
+    }
   }
 
   return (

@@ -23,10 +23,14 @@ import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
 import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilter";
-import { candidateSummaryFromProfile } from "@/lib/candidateFromProfile";
+import {
+  candidateClaimsFromProfile,
+  candidateSummaryFromProfile,
+} from "@/lib/candidateFromProfile";
 
 // Candidate identity is sourced from the proof graph, not a live GitHub fetch.
 const CANDIDATE_SUMMARY = candidateSummaryFromProfile(exampleProfile);
+const CANDIDATE_CLAIMS = candidateClaimsFromProfile(exampleProfile);
 const CANDIDATE_FIRST_NAME = exampleProfile.header.name.split(" ")[0] || "";
 
 // ---------- voice modes ----------
@@ -284,7 +288,7 @@ function WedgePage() {
       blogSignal: b,
       hnSignal: h,
       jobPostMarkdown: jobMarkdown,
-      candidateProfile: null,
+      candidateClaims: CANDIDATE_CLAIMS,
     };
     try {
       const res = await callClaudeFn({
