@@ -11,6 +11,7 @@ import {
   Globe,
   Link2,
   Box,
+  X,
 } from "lucide-react";
 import type {
   Claim,
