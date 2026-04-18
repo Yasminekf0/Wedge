@@ -152,27 +152,66 @@ function WedgePage() {
     p: CandidateProof | null,
     c: CompanySignal | null,
     idea: ArtifactIdea,
+    voiceInstruction?: string,
   ) {
     setEmailError(false);
     setEmailLoading(true);
+    setSlopHint(null);
+    setEmailStage("drafting");
     try {
+      const baseData = {
+        mode: "email" as const,
+        jobMarkdown,
+        companySignalJson: c ? JSON.stringify(c, null, 2) : "",
+        candidateSummary: summariseCandidate(p),
+        ideaJson: JSON.stringify(idea, null, 2),
+      };
+
       const res = await callClaudeFn({
-        data: {
-          mode: "email",
-          jobMarkdown,
-          companySignalJson: c ? JSON.stringify(c, null, 2) : "",
-          candidateSummary: summariseCandidate(p),
-          ideaJson: JSON.stringify(idea, null, 2),
-        },
+        data: voiceInstruction
+          ? { ...baseData, extraUserInstruction: voiceInstruction }
+          : baseData,
       });
-      if (res.mode === "email") {
-        setEmail({ subject: res.subject, body: res.body });
+      if (res.mode !== "email") return;
+
+      let draft = { subject: res.subject, body: res.body };
+
+      // Slop filter — one-shot correction loop.
+      setEmailStage("checking");
+      const violations = detectSlop(draft);
+      if (violations.length > 0) {
+        setEmailStage("rewriting");
+        try {
+          const fixInstruction = [
+            voiceInstruction || "",
+            slopRegenInstruction(violations),
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+          const res2 = await callClaudeFn({
+            data: { ...baseData, extraUserInstruction: fixInstruction },
+          });
+          if (res2.mode === "email") {
+            draft = { subject: res2.subject, body: res2.body };
+            const second = detectSlop(draft);
+            if (second.length > 0) {
+              setSlopHint(
+                "Draft may still read slightly generic — tap Regenerate or edit before sending.",
+              );
+            }
+          }
+        } catch (e) {
+          console.error("slop regen failed", e);
+        }
       }
+
+      setEmail(draft);
     } catch (e) {
       console.error(e);
       setEmailError(true);
     } finally {
       setEmailLoading(false);
+      setEmailStage("idle");
     }
   }
 
