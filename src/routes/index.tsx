@@ -167,6 +167,13 @@ function WedgePage() {
   const [copied, setCopied] = React.useState(false);
   const [copiedSubject, setCopiedSubject] = React.useState(false);
 
+  // Artifact selection + voice mode
+  const [selectedIdeaIndex, setSelectedIdeaIndex] = React.useState<number | null>(
+    null,
+  );
+  const [voiceMode, setVoiceMode] = React.useState<SlopMode>("default");
+  const outreachRef = React.useRef<HTMLDivElement>(null);
+
   // Long-loading label timer
   React.useEffect(() => {
     if (!loading) {
