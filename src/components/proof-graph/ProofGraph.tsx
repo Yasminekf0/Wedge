@@ -583,8 +583,8 @@ function ClaimDetailPanel({
                     </span>
                   )}
                   {claim.details?.status && (
-                    <span className="mono inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-accent-fg">
-                      <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    <span className="mono inline-flex items-center gap-1.5 rounded-full border border-accent/60 bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-white">
+                      <span className="h-1.5 w-1.5 rounded-full bg-white" />
                       {claim.details.status}
                     </span>
                   )}
