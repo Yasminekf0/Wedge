@@ -23,7 +23,37 @@ import { fetchCompanyBlog, extractDomain, type BlogSignal } from "@/lib/blog";
 import { fetchHNSignal, type HNSignal } from "@/lib/hn";
 import { callClaude, type ArtifactIdea } from "@/server/claude.functions";
 import { validateCitations } from "@/lib/validation";
-import { detectSlop, slopRegenInstruction } from "@/lib/slopFilter";
+import { detectSlop, slopRegenInstruction, type SlopMode } from "@/lib/slopFilter";
+
+// ---------- voice modes ----------
+
+const BLUNTER_INSTRUCTION = `Rewrite this as a single paragraph. 40-70 words total. No three-paragraph structure. No separate greeting or signoff line — it's one continuous block.
+
+Keep exactly: (1) the specific reference from the citations, (2) what the candidate built/is building, (3) the proof graph link. Cut everything else. Cut hedges, cut pleasantries, cut setup sentences.
+
+The email should feel like it was dashed off in 90 seconds. Short sentences. No adverbs. No em-dashes (still banned). No tidy closer. End on the concrete next step or the link, whichever is later.
+
+Even in single-paragraph mode, the proof graph link must be introduced in plain terms before the URL. A one-clause intro is enough: "instead of a CV, here's the proof graph with code behind every claim: {proof-graph-url}". Do not drop the URL naked.
+
+Still return the same JSON shape: { subject, body }. Body is one paragraph, no \\n\\n breaks.`;
+
+const WARMER_INSTRUCTION = `Rewrite this keeping the three-paragraph structure, but add a specific sentence expressing genuine interest in what the company is working on.
+
+Rules for the appreciation sentence:
+- It goes in paragraph 1, after the specific citation reference.
+- It must name the thing the candidate finds interesting, specifically. Not "I love what you're doing" (meaningless). Something like "The direction you're taking with {specific thing from the citations or company signal} is one of the more interesting bets in {their actual space, named specifically}."
+- One sentence maximum. No gushing. No "I've been a huge fan". No "passionate", "excited", "thrilled" (all banned anyway).
+- The sentence must feel earned — it follows a specific observation, not replaces one.
+
+The rest of the email stays peer-to-peer. Warmer does NOT mean sycophantic. It means: add one line that admits you actually care about their work, grounded in a specific thing.
+
+Keep all other rules: no em-dashes, no banned vocabulary, no tidy closer, 90-140 words in body. Paragraph 3 still introduces the proof graph in plain terms before the URL.`;
+
+function instructionForMode(mode: SlopMode): string | undefined {
+  if (mode === "blunter") return BLUNTER_INSTRUCTION;
+  if (mode === "warmer") return WARMER_INSTRUCTION;
+  return undefined;
+}
 
 export const Route = createFileRoute("/")({
   component: WedgePage,
