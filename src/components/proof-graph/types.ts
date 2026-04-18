@@ -23,6 +23,8 @@ export interface Claim {
   id: string;
   /** Short, declarative sentence. The headline of the card. */
   text: string;
+  /** Optional secondary line shown under the headline (smaller, muted). */
+  subtext?: string;
   section: ClaimSection;
   /** Filter ids this claim matches. */
   tags: string[];
