@@ -9,12 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ProofGraphRouteImport } from './routes/proof-graph'
+import { Route as OutreachRouteImport } from './routes/outreach'
 import { Route as IndexRouteImport } from './routes/index'
 
-const ProofGraphRoute = ProofGraphRouteImport.update({
-  id: '/proof-graph',
-  path: '/proof-graph',
+const OutreachRoute = OutreachRouteImport.update({
+  id: '/outreach',
+  path: '/outreach',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,37 +25,37 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/proof-graph': typeof ProofGraphRoute
+  '/outreach': typeof OutreachRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/proof-graph': typeof ProofGraphRoute
+  '/outreach': typeof OutreachRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/proof-graph': typeof ProofGraphRoute
+  '/outreach': typeof OutreachRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/proof-graph'
+  fullPaths: '/' | '/outreach'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/proof-graph'
-  id: '__root__' | '/' | '/proof-graph'
+  to: '/' | '/outreach'
+  id: '__root__' | '/' | '/outreach'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ProofGraphRoute: typeof ProofGraphRoute
+  OutreachRoute: typeof OutreachRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/proof-graph': {
-      id: '/proof-graph'
-      path: '/proof-graph'
-      fullPath: '/proof-graph'
-      preLoaderRoute: typeof ProofGraphRouteImport
+    '/outreach': {
+      id: '/outreach'
+      path: '/outreach'
+      fullPath: '/outreach'
+      preLoaderRoute: typeof OutreachRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,8 +70,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ProofGraphRoute: ProofGraphRoute,
+  OutreachRoute: OutreachRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
