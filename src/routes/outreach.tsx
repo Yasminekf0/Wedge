@@ -822,7 +822,7 @@ function WedgePage() {
             <div className="relative">
               {/* Small, non-interactive preview */}
               <div
-                className="pointer-events-none relative h-[280px] overflow-hidden rounded-md border border-border bg-background"
+                className="pointer-events-none relative h-[280px] overflow-hidden rounded-md border border-border bg-background [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_*]:[scrollbar-width:none] [&_*::-webkit-scrollbar]:hidden"
                 aria-hidden="true"
               >
                 <div
@@ -836,26 +836,21 @@ function WedgePage() {
               <button
                 type="button"
                 onClick={() => setProofExpanded(true)}
-                className="mono absolute bottom-3 right-3 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:bg-foreground/5"
+                className="mono absolute top-3 right-3 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:bg-foreground/5"
               >
                 Expand
               </button>
             </div>
 
             {proofExpanded && (
-              <div className="fixed inset-0 z-50 overflow-auto bg-background">
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur">
-                  <span className="mono text-[12px] uppercase tracking-wider text-muted-fg">
-                    {proofNum} / Proof Graph
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setProofExpanded(false)}
-                    className="mono rounded-md border border-border bg-background px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground transition-colors hover:bg-foreground/5"
-                  >
-                    Collapse
-                  </button>
-                </div>
+              <div className="fixed inset-0 z-50 overflow-auto bg-background [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_*]:[scrollbar-width:none] [&_*::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setProofExpanded(false)}
+                  className="mono fixed top-4 right-4 z-10 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition-colors hover:bg-foreground/5"
+                >
+                  Collapse
+                </button>
                 <ProofGraph profile={{ ...exampleProfile, jobLoaded: true }} />
               </div>
             )}
