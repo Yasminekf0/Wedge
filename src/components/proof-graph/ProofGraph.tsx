@@ -780,6 +780,8 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
       ) : (
         <PannableBoard
           claims={claims}
+          sections={sections}
+          boardHeight={boardHeight}
           expandedId={expandedId}
           onToggle={toggleClaim}
           activeFilters={activeFilters}
