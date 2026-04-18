@@ -800,14 +800,13 @@ export function ProofGraph({ profile }: { profile: ProofProfile }) {
     [profile.jobActiveFilterIds],
   );
 
-  // Restrictive job match: a claim must carry EVERY job filter tag.
+  // Permissive job match: a claim matches if it shares ANY tag with the job's
+  // required filters. The list of job filters is intentionally short so the
+  // rearrangement still feels selective.
   const isJobMatch = React.useCallback(
     (c: Claim) => {
       if (!profile.jobLoaded || jobFilterIds.size === 0) return false;
-      for (const t of jobFilterIds) {
-        if (!c.tags.includes(t)) return false;
-      }
-      return true;
+      return c.tags.some((t) => jobFilterIds.has(t));
     },
     [profile.jobLoaded, jobFilterIds],
   );
