@@ -193,14 +193,14 @@ function autoLayout(
     let rowMaxH = 0;
 
     for (const c of items) {
-      const span = SIZE_TO_SPAN[c.size || "md"];
+      const span = 1; // uniform width for all cards
       if (col + span > COLS) {
         rowY += rowMaxH + ROW_GAP;
         col = 0;
         rowMaxH = 0;
       }
       const x = PAD_X + col * (COL_W + COL_GAP);
-      const baseH = SIZE_TO_HEIGHT[c.size || "md"];
+      const baseH = SIZE_TO_HEIGHT.md;
       // Reserve extra room for pre-expanded cards so neighbors don't overlap.
       const evidenceCount = c.evidence.length || 1;
       const expandBonus = expandedIds.has(c.id) ? 28 + evidenceCount * 64 : 0;
@@ -425,7 +425,8 @@ function ClaimCard({
   index,
   filterLabelById,
 }: CardProps) {
-  const width = spanWidth(SIZE_TO_SPAN[claim.size || "md"]);
+  // All cards share the same width regardless of claim.size.
+  const width = spanWidth(1);
   const x = claim.position?.x ?? 0;
   const y = claim.position?.y ?? 0;
 
@@ -578,13 +579,15 @@ function PannableBoard({
     if (!vp) return { x: nx, y: ny };
     const w = vp.clientWidth;
     const h = vp.clientHeight;
+    // Allow generous bottom slack so expanded cards never strand content.
+    const effectiveH = boardHeight + 240;
     const minX = Math.min(0, w - BOARD_W);
-    const minY = Math.min(0, h - boardHeight);
+    const minY = Math.min(0, h - effectiveH);
     return {
       x: Math.min(0, Math.max(minX, nx)),
       y: Math.min(0, Math.max(minY, ny)),
     };
-  }, []);
+  }, [boardHeight]);
 
   const recenter = React.useCallback(() => {
     // Default view: top-left aligned (densest zone visible).
