@@ -245,10 +245,11 @@ function ProofHeaderBar({ profile }: { profile: ProofProfile }) {
               href={header.linkedin}
               target="_blank"
               rel="noreferrer"
-              aria-label="LinkedIn"
-              className="rounded-md p-1.5 text-muted-fg transition-colors hover:bg-foreground/5 hover:text-foreground"
+              aria-label="View LinkedIn profile"
+              className="inline-flex items-center gap-2 rounded-md border border-[#0A66C2]/40 bg-[#0A66C2] px-3 py-1.5 text-[13px] font-medium text-white shadow-[0_4px_14px_-6px_rgba(10,102,194,0.6)] transition-all hover:bg-[#0958a8] hover:shadow-[0_6px_18px_-6px_rgba(10,102,194,0.8)]"
             >
               <Linkedin className="h-4 w-4" />
+              LinkedIn
             </a>
           )}
           {header.github && (
