@@ -232,31 +232,31 @@ export function detectSlop(
   // 6. Length — bounds depend on the mode.
   const wc = countWords(body);
   if (mode === "blunter") {
-    if (wc < 30) {
+    if (wc < 40) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too short for blunter mode (${wc} words). Aim for 40-80 words in a single paragraph.`,
+        note: `Body is too short for blunter mode (${wc} words). Aim for 50-90 words in a single paragraph.`,
       });
-    } else if (wc > 90) {
+    } else if (wc > 100) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too long for blunter mode (${wc} words). Cut to 40-80 words. Single paragraph only.`,
+        note: `Body is too long for blunter mode (${wc} words). Cut to 50-90 words. Single paragraph only.`,
       });
     }
   } else {
-    if (wc < 80) {
+    if (wc < 90) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too short (${wc} words). Aim for 90-130 words, with a hard floor at 80.`,
+        note: `Body is too short (${wc} words). Aim for 100-150 words, with a hard floor at 90.`,
       });
-    } else if (wc > 140) {
+    } else if (wc > 160) {
       violations.push({
         type: "length",
         evidence: `${wc} words`,
-        note: `Body is too long (${wc} words). Cut to 90-130 words by removing the weakest sentence.`,
+        note: `Body is too long (${wc} words). Cut to 100-150 words by removing the weakest sentence.`,
       });
     }
   }
