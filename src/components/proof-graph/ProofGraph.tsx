@@ -579,13 +579,15 @@ function PannableBoard({
     if (!vp) return { x: nx, y: ny };
     const w = vp.clientWidth;
     const h = vp.clientHeight;
+    // Allow generous bottom slack so expanded cards never strand content.
+    const effectiveH = boardHeight + 240;
     const minX = Math.min(0, w - BOARD_W);
-    const minY = Math.min(0, h - boardHeight);
+    const minY = Math.min(0, h - effectiveH);
     return {
       x: Math.min(0, Math.max(minX, nx)),
       y: Math.min(0, Math.max(minY, ny)),
     };
-  }, []);
+  }, [boardHeight]);
 
   const recenter = React.useCallback(() => {
     // Default view: top-left aligned (densest zone visible).
