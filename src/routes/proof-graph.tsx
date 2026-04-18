@@ -31,7 +31,7 @@ function ProofGraphPage() {
       <button
         type="button"
         onClick={() => setJobLoaded((v) => !v)}
-        className="mono fixed right-4 top-4 z-50 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:bg-foreground/5 hover:text-foreground"
+        className="mono fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background/90 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-fg backdrop-blur transition-colors hover:bg-foreground/5 hover:text-foreground"
       >
         {jobLoaded ? "clear job" : "simulate job match"}
       </button>
