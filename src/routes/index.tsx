@@ -338,9 +338,9 @@ function WedgePage() {
       setIdeasStage("idle");
     }
 
-    if (firstIdea) {
-      await generateEmail(jobMarkdown, p, c, firstIdea);
-    }
+    // Selection drives outreach: do NOT auto-generate the email here.
+    // Section 04 stays empty until the user picks an artifact.
+    void firstIdea;
   }
 
   async function handleGenerate() {
