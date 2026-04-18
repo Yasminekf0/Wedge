@@ -712,6 +712,7 @@ function PannableBoard({
                 expanded={expandedId === claim.id}
                 dim={dim}
                 highlight={highlight}
+                jobMatch={jobMatchedIds.has(claim.id)}
                 onToggle={onToggle}
                 index={i}
                 filterLabelById={filterLabelById}
