@@ -218,6 +218,8 @@ function WedgePage() {
 
     setCompanyState("idle");
     setCompany(null);
+    setBlog(null);
+    setHn(null);
     setProofState(ghTrim ? "loading" : "skipped");
     setProof(null);
     setJobMd("");
@@ -308,13 +310,56 @@ function WedgePage() {
           })
       : Promise.resolve(null);
 
-    const [c, p] = await Promise.all([companyP, proofP]);
+    // Blog + HN: kick off in parallel. Domain is best-effort: prefer the
+    // org's `blog` field once company resolves, otherwise fall back to the
+    // job post URL's host.
+    const jobDomain = extractDomain(jobUrl);
+    const blogP: Promise<BlogSignal | null> = extractedName
+      ? companyP
+          .then((c) =>
+            fetchCompanyBlog({
+              companyName: extractedName!,
+              orgBlogUrl: c?.org.blog ?? null,
+              orgWebsiteDomain:
+                extractDomain(c?.org.blog ?? null) || jobDomain,
+            }),
+          )
+          .then((b) => {
+            setBlog(b);
+            return b;
+          })
+          .catch((e) => {
+            console.error("blog fetch failed", e);
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const hnP: Promise<HNSignal | null> = extractedName
+      ? companyP
+          .then((c) =>
+            fetchHNSignal({
+              companyName: extractedName!,
+              orgWebsiteDomain:
+                extractDomain(c?.org.blog ?? null) || jobDomain,
+            }),
+          )
+          .then((h) => {
+            setHn(h);
+            return h;
+          })
+          .catch((e) => {
+            console.error("hn fetch failed", e);
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const [c, p, b, h] = await Promise.all([companyP, proofP, blogP, hnP]);
 
     const remaining = getRateLimitRemaining();
     if (remaining !== null && remaining < 5) setRateLow(true);
 
     // ---------- Step 2: ideas + email ----------
-    await runIdeasAndEmail(jobMarkdown, c, p);
+    await runIdeasAndEmail(jobMarkdown, c, p, b, h);
     setLoading(false);
   }
 
