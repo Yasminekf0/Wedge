@@ -482,13 +482,15 @@ function ClaimCard({
         "absolute text-left",
         "rounded-lg border bg-background transition-shadow",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        jobMatch && !expanded
-          ? "border-accent shadow-[0_0_0_1px_hsl(var(--accent)/0.4),0_12px_40px_-12px_hsl(var(--accent)/0.55)]"
+        jobMatch
+          ? "border-accent shadow-[0_0_0_1px_hsl(var(--accent)/0.45),0_16px_48px_-12px_hsl(var(--accent)/0.6)]"
           : highlight && !expanded
             ? "border-accent/60 shadow-[0_0_0_1px_rgba(76,110,245,0.25),0_4px_24px_-12px_rgba(76,110,245,0.4)]"
             : "border-border",
         expanded
-          ? "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
+          ? jobMatch
+            ? "z-30 shadow-[0_0_0_1px_hsl(var(--accent)/0.5),0_28px_70px_-20px_hsl(var(--accent)/0.7)]"
+            : "z-30 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
           : jobMatch
             ? "z-20 hover:shadow-[0_16px_40px_-12px_hsl(var(--accent)/0.7)]"
             : "z-10 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.7)]",
