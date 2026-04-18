@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { exampleProfile } from "@/components/proof-graph/exampleProfile";
 import { ProofGraph } from "@/components/proof-graph/ProofGraph";
